@@ -539,6 +539,32 @@ class PaymentGatewayApiTest extends TestCase
         }
     }
 
+    public function testQrisPartnerReferenceNoMax25(): void
+    {
+        $createOrderByApiRequest = PaymentGatewayFixtures::getCreateOrderByApiRequest();
+        $createOrderByApiRequest->setPartnerReferenceNo('12345678901234567890123456');
+
+        $payOptionDetail = new \Dana\PaymentGateway\v1\Model\PayOptionDetail([
+            'payMethod' => \Dana\PaymentGateway\v1\Enum\PayMethod::NETWORK_PAY,
+            'payOption' => \Dana\PaymentGateway\v1\Enum\PayOption::NETWORK_PAY_PG_QRIS,
+            'transAmount' => new \Dana\PaymentGateway\v1\Model\Money([
+                'value' => '222000.00',
+                'currency' => 'IDR',
+            ]),
+        ]);
+        $createOrderByApiRequest->setPayOptionDetails([$payOptionDetail]);
+        $createOrderByApiRequest->setExternalStoreId('test_shop');
+
+        try {
+            $this->apiInstance->createOrder($createOrderByApiRequest);
+            $this->fail('Expected validation error when QRIS partnerReferenceNo exceeds 25 characters');
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertStringContainsString('partnerreferenceno', $msg);
+            $this->assertStringContainsString('25', $msg);
+        }
+    }
+
     /**
      * Money amount value pattern - negative cases: values that do not match (e.g. .15, no decimals)
      *
@@ -677,6 +703,29 @@ class PaymentGatewayApiTest extends TestCase
         }
     }
 
+    public function testCreateOrderOptionalNestedGoodsRequiresAllFields(): void
+    {
+        $request = PaymentGatewayFixtures::getCreateOrderByApiRequest();
+        $order = $request->getAdditionalInfo()->getOrder();
+        $order->setGoods([
+            new \Dana\PaymentGateway\v1\Model\Goods([
+                'name' => 'Item',
+                'merchantGoodsId' => '',
+                'description' => 'desc',
+                'category' => 'cat',
+                'price' => new \Dana\PaymentGateway\v1\Model\Money(['value' => '10000.00', 'currency' => 'IDR']),
+                'quantity' => '1',
+            ]),
+        ]);
+
+        try {
+            $this->apiInstance->createOrder($request);
+            $this->fail('Expected goods[].merchantGoodsId validation error but request succeeded');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('merchantgoodsid', strtolower($e->getMessage()));
+        }
+    }
+
     public function testCreateOrderOptionalNestedShippingInfoRequiresFirstName(): void
     {
         $request = PaymentGatewayFixtures::getCreateOrderByApiRequest();
@@ -756,6 +805,247 @@ class PaymentGatewayApiTest extends TestCase
 
         $this->expectException(\Dana\ApiException::class);
         $this->apiInstance->createOrder($createOrderByApiRequest);
+    }
+
+    public function testCreateOrderRejectsEmptyMcc(): void
+    {
+        $request = PaymentGatewayFixtures::getCreateOrderByApiRequest();
+        $request->getAdditionalInfo()->setMcc('');
+
+        try {
+            $this->apiInstance->createOrder($request);
+            $this->fail('Expected validation error when mcc is empty');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('mcc', strtolower($e->getMessage()));
+        }
+    }
+
+    public function testCreateOrderRejectsEmptyTerminalType(): void
+    {
+        $request = PaymentGatewayFixtures::getCreateOrderByApiRequest();
+        $request->getAdditionalInfo()->getEnvInfo()->setTerminalType('');
+
+        try {
+            $this->apiInstance->createOrder($request);
+            $this->fail('Expected validation error when terminalType is empty');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('terminaltype', strtolower($e->getMessage()));
+        }
+    }
+
+    public function testCreateOrderRejectsSandboxAmountOverMax(): void
+    {
+        $request = PaymentGatewayFixtures::getCreateOrderByApiRequest();
+        $request->setAmount(new \Dana\PaymentGateway\v1\Model\Money([
+            'value' => '10000000.01',
+            'currency' => 'IDR',
+        ]));
+
+        try {
+            $this->apiInstance->createOrder($request);
+            $this->fail('Expected validation error when sandbox amount exceeds 10000000');
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertStringContainsString('amount', $msg);
+            $this->assertStringContainsString('10000000', $e->getMessage());
+        }
+    }
+
+    public function testCreateOrderDefaultsEmptySourcePlatformToIpg(): void
+    {
+        $request = PaymentGatewayFixtures::getCreateOrderByApiRequest();
+        $request->getAdditionalInfo()->getEnvInfo()->setSourcePlatform('');
+
+        try {
+            $this->apiInstance->createOrder($request);
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertFalse(
+                str_contains($msg, 'sourceplatform') && str_contains($msg, 'required'),
+                'empty sourcePlatform should default to IPG, got: ' . $e->getMessage()
+            );
+        }
+
+        $this->assertSame(
+            'IPG',
+            $request->getAdditionalInfo()->getEnvInfo()->getSourcePlatform(),
+            'empty sourcePlatform should be defaulted to IPG before the request is sent'
+        );
+    }
+
+    /**
+     * CreateOrderByRedirect without externalStoreId:
+     * - success: append SUCCESS QRIS hint on responseMessage
+     * - HTTP error: put ERROR QRIS hint (incl. partnerReferenceNo max 25) on exception message
+     */
+    public function testCreateOrderByRedirectAppendsSandboxQrisExternalStoreIdHintInResponse(): void
+    {
+        $request = PaymentGatewayFixtures::getCreateOrderByRedirectRequest();
+
+        try {
+            $response = $this->apiInstance->createOrder($request);
+            $this->assertInstanceOf(CreateOrderResponse::class, $response);
+            $msg = strtolower((string) $response->getResponseMessage());
+            $this->assertStringContainsString(
+                'if you want to use qris',
+                $msg,
+                'responseMessage should mention wanting to use QRIS, got: ' . $response->getResponseMessage()
+            );
+            $this->assertStringContainsString(
+                'not showing in payment methods',
+                $msg,
+                'responseMessage should mention QRIS not showing, got: ' . $response->getResponseMessage()
+            );
+            $this->assertStringContainsString(
+                'make sure you already fill externalstoreid',
+                $msg,
+                'responseMessage should tell user to fill externalStoreId when QRIS is not shown, got: ' . $response->getResponseMessage()
+            );
+            $this->assertStringNotContainsString(
+                'partnerreferenceno max is 25 chars',
+                $msg,
+                'success responseMessage should not include partnerReferenceNo limit (error-only), got: ' . $response->getResponseMessage()
+            );
+            $this->assertStringContainsString(
+                'dashboard.dana.id/sandbox/submerchants',
+                $msg,
+                'responseMessage should link to sandbox submerchants for externalStoreId, got: ' . $response->getResponseMessage()
+            );
+            $this->assertStringContainsString(
+                'external shop',
+                $msg,
+                'responseMessage should mention external shop id section, got: ' . $response->getResponseMessage()
+            );
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertStringContainsString(
+                'if you want to use qris',
+                $msg,
+                'HTTP error for redirect without externalStoreId should put QRIS guidance on exception message, got: ' . $e->getMessage()
+            );
+            $this->assertStringContainsString(
+                'externalstoreid',
+                $msg,
+                'exception message should mention externalStoreId, got: ' . $e->getMessage()
+            );
+            $this->assertStringContainsString(
+                'partnerreferenceno',
+                $msg,
+                'exception message should mention partnerReferenceNo limit, got: ' . $e->getMessage()
+            );
+            $this->assertStringContainsString(
+                '25',
+                $msg,
+                'exception message should mention 25-char QRIS limit, got: ' . $e->getMessage()
+            );
+            $this->assertStringContainsString(
+                'dashboard.dana.id/sandbox/submerchants',
+                $msg,
+                'exception message should link to sandbox submerchants, got: ' . $e->getMessage()
+            );
+        }
+    }
+
+    /**
+     * CreateOrderByRedirect with externalStoreId should not append QRIS guidance
+     * on success responseMessage or HTTP-error exception message.
+     */
+    public function testCreateOrderByRedirectWithExternalStoreIdDoesNotAppendQrisHint(): void
+    {
+        $request = PaymentGatewayFixtures::getCreateOrderByRedirectRequest();
+        $request->setExternalStoreId('test_shop');
+
+        try {
+            $response = $this->apiInstance->createOrder($request);
+            $this->assertInstanceOf(CreateOrderResponse::class, $response);
+            if ($response->getResponseMessage() !== null && $response->getResponseMessage() !== '') {
+                $msg = strtolower($response->getResponseMessage());
+                $this->assertStringNotContainsString(
+                    'partnerreferenceno max is 25 chars',
+                    $msg,
+                    'responseMessage should not include sandbox QRIS guidance when externalStoreId is set, got: '
+                        . $response->getResponseMessage()
+                );
+                $this->assertStringNotContainsString(
+                    'if you want to use qris',
+                    $msg,
+                    'responseMessage should not include sandbox QRIS hint when externalStoreId is set, got: '
+                        . $response->getResponseMessage()
+                );
+            }
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertStringNotContainsString(
+                'partnerreferenceno max is 25 chars',
+                $msg,
+                'exception message should not include QRIS partnerReferenceNo guidance when externalStoreId is set, got: '
+                    . $e->getMessage()
+            );
+            $this->assertStringNotContainsString(
+                'if you want to use qris',
+                $msg,
+                'exception message should not include QRIS externalStoreId guidance when externalStoreId is set, got: '
+                    . $e->getMessage()
+            );
+            $response = $e->getResponseObject();
+            if ($response instanceof CreateOrderResponse
+                && $response->getResponseMessage() !== null
+                && $response->getResponseMessage() !== ''
+            ) {
+                $respMsg = strtolower((string) $response->getResponseMessage());
+                $this->assertStringNotContainsString(
+                    'partnerreferenceno max is 25 chars',
+                    $respMsg,
+                    'responseMessage should not include QRIS guidance when externalStoreId is set, got: '
+                        . $response->getResponseMessage()
+                );
+                $this->assertStringNotContainsString(
+                    'if you want to use qris',
+                    $respMsg,
+                    'responseMessage should not include QRIS hint when externalStoreId is set, got: '
+                        . $response->getResponseMessage()
+                );
+            }
+        }
+    }
+
+    public function testCreateOrderWithSubMerchantIdAppendsSandboxGuidanceOnBusinessError(): void
+    {
+        $request = PaymentGatewayFixtures::getCreateOrderByApiRequest();
+        $request->setSubMerchantId('INVALID_SUB_MERCHANT_ID_XYZ');
+
+        try {
+            $response = $this->apiInstance->createOrder($request);
+            $responseCode = (string) $response->getResponseCode();
+            if (str_starts_with($responseCode, '200')) {
+                $this->markTestSkipped(
+                    'API accepted invalid subMerchantId (responseCode=' . $responseCode . '); cannot assert error guidance'
+                );
+            }
+            $msg = strtolower((string) $response->getResponseMessage());
+        } catch (\Dana\ApiException $e) {
+            $response = $e->getResponseObject();
+            if (!$response instanceof CreateOrderResponse) {
+                $body = (string) $e->getResponseBody();
+                if ($body === '' || strpos($body, 'responseCode') === false) {
+                    $this->markTestSkipped(
+                        'No API error body to assert subMerchantId guidance: ' . $e->getMessage()
+                    );
+                }
+                $this->fail(
+                    'decoded response should still be returned on ApiException so responseMessage can carry guidance; got: '
+                    . $e->getMessage()
+                );
+            }
+            $msg = strtolower((string) $response->getResponseMessage());
+        }
+
+        $this->assertTrue(
+            str_contains($msg, 'submerchantid')
+                || str_contains($msg, 'externaldivisionid')
+                || str_contains($msg, 'dashboard.dana.id/sandbox/submerchants'),
+            'responseMessage should guide about subMerchantId existence, got: ' . ($msg ?? '')
+        );
     }
 
 }

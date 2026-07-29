@@ -216,8 +216,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\CancelOrderResponse', []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($cancelOrderRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\CancelOrderResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -243,8 +245,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\CancelOrderResponse', []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($cancelOrderRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\CancelOrderResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -285,8 +289,10 @@ class PaymentGatewayApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\PaymentGateway\v1\CustomValidation::processResponse($cancelOrderRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -310,7 +316,7 @@ class PaymentGatewayApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\PaymentGateway\v1\CustomValidation::enrichCreateOrderError($cancelOrderRequest, $e);
         }
     }
 
@@ -354,7 +360,7 @@ class PaymentGatewayApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $cancelOrderRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -364,8 +370,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($cancelOrderRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -589,8 +597,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\ConsultPayResponse', []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($consultPayRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\ConsultPayResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -631,8 +641,10 @@ class PaymentGatewayApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\PaymentGateway\v1\CustomValidation::processResponse($consultPayRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -648,7 +660,7 @@ class PaymentGatewayApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\PaymentGateway\v1\CustomValidation::enrichCreateOrderError($consultPayRequest, $e);
         }
     }
 
@@ -692,7 +704,7 @@ class PaymentGatewayApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $consultPayRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -702,8 +714,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($consultPayRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -927,8 +941,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\CreateOrderResponse', []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($createOrderRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\CreateOrderResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -969,8 +985,10 @@ class PaymentGatewayApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\PaymentGateway\v1\CustomValidation::processResponse($createOrderRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -986,7 +1004,7 @@ class PaymentGatewayApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\PaymentGateway\v1\CustomValidation::enrichCreateOrderError($createOrderRequest, $e);
         }
     }
 
@@ -1030,7 +1048,7 @@ class PaymentGatewayApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $createOrderRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -1040,8 +1058,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($createOrderRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1265,8 +1285,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\QueryPaymentResponse', []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($queryPaymentRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\QueryPaymentResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1307,8 +1329,10 @@ class PaymentGatewayApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\PaymentGateway\v1\CustomValidation::processResponse($queryPaymentRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -1324,7 +1348,7 @@ class PaymentGatewayApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\PaymentGateway\v1\CustomValidation::enrichCreateOrderError($queryPaymentRequest, $e);
         }
     }
 
@@ -1368,7 +1392,7 @@ class PaymentGatewayApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $queryPaymentRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -1378,8 +1402,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($queryPaymentRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1603,8 +1629,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\RefundOrderResponse', []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($refundOrderRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\RefundOrderResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1630,8 +1658,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\RefundOrderResponse', []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($refundOrderRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\PaymentGateway\v1\Model\RefundOrderResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1672,8 +1702,10 @@ class PaymentGatewayApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\PaymentGateway\v1\CustomValidation::processResponse($refundOrderRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -1697,7 +1729,7 @@ class PaymentGatewayApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\PaymentGateway\v1\CustomValidation::enrichCreateOrderError($refundOrderRequest, $e);
         }
     }
 
@@ -1741,7 +1773,7 @@ class PaymentGatewayApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $refundOrderRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -1751,8 +1783,10 @@ class PaymentGatewayApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\PaymentGateway\v1\CustomValidation::processResponse($refundOrderRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];

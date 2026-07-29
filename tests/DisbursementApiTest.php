@@ -282,4 +282,99 @@ class DisbursementApiTest extends TestCase
         $validStatuses = ['00', '01', '02', '03', '04', '05', '06', '07'];
         $this->assertContains($response->getLatestTransactionStatus(), $validStatuses, 'Latest transaction status should be valid');
     }
+
+    public function testBankAccountInquiryRejectsWrongBeneficiaryAccountInSandbox(): void
+    {
+        $request = DisbursementFixtures::getBankAccountInquiryRequest();
+        $request->setBeneficiaryAccountNumber('0000000000');
+
+        try {
+            $this->apiInstance->bankAccountInquiry($request);
+            $this->fail('Expected validation error for wrong beneficiaryAccountNumber in sandbox');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('beneficiaryaccountnumber', strtolower($e->getMessage()));
+        }
+    }
+
+    public function testBankAccountInquiryRejectsWrongBankCodeInSandbox(): void
+    {
+        $request = DisbursementFixtures::getBankAccountInquiryRequest();
+        $request->getAdditionalInfo()->setBeneficiaryBankCode('002');
+
+        try {
+            $this->apiInstance->bankAccountInquiry($request);
+            $this->fail('Expected validation error for wrong beneficiaryBankCode in sandbox');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('beneficiarybankcode', strtolower($e->getMessage()));
+        }
+    }
+
+    public function testBankAccountInquiryRejectsEmptyFundType(): void
+    {
+        $request = DisbursementFixtures::getBankAccountInquiryRequest();
+        $request->getAdditionalInfo()->setFundType('');
+
+        try {
+            $this->apiInstance->bankAccountInquiry($request);
+            $this->fail('Expected validation error when fundType is empty');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('fundtype', strtolower($e->getMessage()));
+        }
+    }
+
+    public function testBankAccountInquiryIgnoresSandboxAccountTypeAndBeneficiaryAccountName(): void
+    {
+        $request = DisbursementFixtures::getDynamicBankAccountInquiryRequest();
+        $request->getAdditionalInfo()->setAccountType('MERCHANT_DEPOSIT_ACCOUNT');
+        $request->getAdditionalInfo()->setBeneficiaryAccountName('Someone');
+
+        $response = $this->apiInstance->bankAccountInquiry($request);
+
+        $this->assertInstanceOf(BankAccountInquiryResponse::class, $response);
+        $this->assertNotNull($response->getResponseCode());
+    }
+
+    public function testTransferToDanaIgnoresSandboxChargeTargetAndExternalDivisionId(): void
+    {
+        $request = DisbursementFixtures::getDynamicTransferToDanaRequestWithDivision();
+
+        $response = $this->apiInstance->transferToDana($request);
+
+        $this->assertInstanceOf(TransferToDanaResponse::class, $response);
+        $this->assertNotNull($response->getResponseCode());
+    }
+
+    public function testTransferToBankRejectsSandboxAmountOverMax(): void
+    {
+        $request = DisbursementFixtures::getTransferToBankRequest();
+        $request->setAmount(new \Dana\Disbursement\v1\Model\Money([
+            'value' => '20000000.01',
+            'currency' => 'IDR',
+        ]));
+
+        try {
+            $this->apiInstance->transferToBank($request);
+            $this->fail('Expected validation error when sandbox amount exceeds 20000000');
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertStringContainsString('amount', $msg);
+            $this->assertStringContainsString('20000000', $e->getMessage());
+        }
+    }
+
+    public function testDanaAccountInquiryRejectsSandboxAmountOverMax(): void
+    {
+        $request = DisbursementFixtures::getDynamicDanaAccountInquiryRequest();
+        $request->setAmount(new \Dana\Disbursement\v1\Model\Money([
+            'value' => '20000000.01',
+            'currency' => 'IDR',
+        ]));
+
+        try {
+            $this->apiInstance->danaAccountInquiry($request);
+            $this->fail('Expected validation error when sandbox amount exceeds 20000000');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('20000000', $e->getMessage());
+        }
+    }
 }

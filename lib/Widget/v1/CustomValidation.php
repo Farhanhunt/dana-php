@@ -23,7 +23,10 @@ namespace Dana\Widget\v1;
 
 use Dana\ApiException;
 use Dana\Utils\DateValidation;
+use Dana\Widget\v1\Model\ApplyTokenAuthorizationCodeRequest;
+use Dana\Widget\v1\Model\ApplyTokenRefreshTokenRequest;
 use Dana\Widget\v1\Model\ApplyTokenRequest;
+use Dana\Widget\v1\Model\EnvInfo;
 use Dana\Widget\v1\Model\WidgetPaymentRequest;
 
 /**
@@ -41,13 +44,25 @@ class CustomValidation
      */
     private static $validationRegistry = [
         'Dana\Widget\v1\Model\WidgetPaymentRequest' => [
+            'defaultSourcePlatform',
+            'validateRequiredAdditionalInfoFieldsNotEmpty',
+            'validateSandboxAmount',
             'validateValidUpToWidgetPaymentRequest',
         ],
         'Dana\Widget\v1\Model\ApplyTokenRequest' => [
             'validateApplyTokenAuthCodeNotFromQueryString',
         ],
+        'Dana\Widget\v1\Model\ApplyTokenAuthorizationCodeRequest' => [
+            'validateApplyTokenAuthCodeNotFromQueryString',
+        ],
+        'Dana\Widget\v1\Model\ApplyTokenRefreshTokenRequest' => [
+            'validateApplyTokenAuthCodeNotFromQueryString',
+        ],
         // Add more request types and their validations here as needed
     ];
+
+    /** Sandbox maximum amount (major units) for Widget payment. */
+    private const SANDBOX_MAX_AMOUNT = 10000000;
 
     /**
      * Perform custom validations on the request based on its type
@@ -65,29 +80,149 @@ class CustomValidation
             return;
         }
 
-        // Get the class name of the request
         $className = get_class($request);
+        if ($request instanceof ApplyTokenRequest) {
+            $className = 'Dana\Widget\v1\Model\ApplyTokenRequest';
+        } elseif ($request instanceof ApplyTokenAuthorizationCodeRequest) {
+            $className = 'Dana\Widget\v1\Model\ApplyTokenAuthorizationCodeRequest';
+        } elseif ($request instanceof ApplyTokenRefreshTokenRequest) {
+            $className = 'Dana\Widget\v1\Model\ApplyTokenRefreshTokenRequest';
+        }
 
-        // Check if this request type has validations registered
-        if (isset(self::$validationRegistry[$className])) {
-            $validationErrors = [];
-            foreach (self::$validationRegistry[$className] as $validatorName) {
-                if (method_exists(self::class, $validatorName)) {
-                    try {
-                        self::$validatorName($request);
-                    } catch (ApiException $e) {
-                        $validationErrors[] = $e->getMessage();
-                    }
-                }
+        if (!isset(self::$validationRegistry[$className])) {
+            return;
+        }
+
+        $messages = [];
+        foreach (self::$validationRegistry[$className] as $validatorName) {
+            if (!method_exists(self::class, $validatorName)) {
+                continue;
             }
-            if (!empty($validationErrors)) {
+            try {
+                self::$validatorName($request);
+            } catch (ApiException $e) {
+                $messages[] = $e->getMessage();
+            }
+        }
+
+        if (!empty($messages)) {
+            throw new ApiException(
+                'validation failed: ' . implode('; ', $messages),
+                0,
+                null,
+                null
+            );
+        }
+    }
+
+    /**
+     * Default envInfo.sourcePlatform to IPG when missing/empty.
+     *
+     * @param mixed $request The request to mutate
+     * @return void
+     */
+    private static function defaultSourcePlatform($request)
+    {
+        if ($request === null || !method_exists($request, 'getAdditionalInfo')) {
+            return;
+        }
+        $additionalInfo = $request->getAdditionalInfo();
+        if ($additionalInfo === null || !method_exists($additionalInfo, 'getEnvInfo')) {
+            return;
+        }
+        $envInfo = $additionalInfo->getEnvInfo();
+        if ($envInfo === null || !method_exists($envInfo, 'getSourcePlatform') || !method_exists($envInfo, 'setSourcePlatform')) {
+            return;
+        }
+        $sourcePlatform = $envInfo->getSourcePlatform();
+        if ($sourcePlatform === null || trim((string) $sourcePlatform) === '') {
+            $envInfo->setSourcePlatform(EnvInfo::SOURCE_PLATFORM_IPG);
+        }
+    }
+
+    /**
+     * Reject empty strings for required additionalInfo fields (productCode, envInfo.terminalType).
+     * Note: mcc may be an empty string for Widget.
+     *
+     * @param mixed $request The request to validate
+     * @return void
+     * @throws ApiException if validation fails
+     */
+    private static function validateRequiredAdditionalInfoFieldsNotEmpty($request)
+    {
+        if ($request === null || !method_exists($request, 'getAdditionalInfo')) {
+            return;
+        }
+        $additionalInfo = $request->getAdditionalInfo();
+        if ($additionalInfo === null) {
+            return;
+        }
+        if (method_exists($additionalInfo, 'getProductCode')) {
+            $productCode = $additionalInfo->getProductCode();
+            if ($productCode === null || trim((string) $productCode) === '') {
                 throw new ApiException(
-                    'validation failed: ' . implode('; ', $validationErrors),
+                    'additionalInfo.productCode is required and cannot be empty',
                     0,
                     null,
                     null
                 );
             }
+        }
+        if (method_exists($additionalInfo, 'getEnvInfo')) {
+            $envInfo = $additionalInfo->getEnvInfo();
+            $terminalType = ($envInfo !== null && method_exists($envInfo, 'getTerminalType'))
+                ? $envInfo->getTerminalType()
+                : null;
+            if ($terminalType === null || trim((string) $terminalType) === '') {
+                throw new ApiException(
+                    'additionalInfo.envInfo.terminalType is required and cannot be empty',
+                    0,
+                    null,
+                    null
+                );
+            }
+        }
+    }
+
+    private static function isSandbox(): bool
+    {
+        $env = getenv('DANA_ENV') ?: getenv('ENV') ?: 'sandbox';
+        return strtolower($env) === 'sandbox';
+    }
+
+    /**
+     * In sandbox, amount.value must not exceed SANDBOX_MAX_AMOUNT.
+     *
+     * @param mixed $request The request to validate
+     * @return void
+     * @throws ApiException if validation fails
+     */
+    private static function validateSandboxAmount($request)
+    {
+        if ($request === null || !self::isSandbox()) {
+            return;
+        }
+        if (!method_exists($request, 'getAmount')) {
+            return;
+        }
+        $amount = $request->getAmount();
+        if ($amount === null || !method_exists($amount, 'getValue')) {
+            return;
+        }
+        $value = $amount->getValue();
+        if ($value === null || trim((string) $value) === '') {
+            return;
+        }
+        if (!is_numeric($value)) {
+            return;
+        }
+        if ((float) $value > self::SANDBOX_MAX_AMOUNT) {
+            throw new ApiException(
+                'in sandbox, amount.value must not exceed ' . self::SANDBOX_MAX_AMOUNT . '; got ' . $value,
+                0,
+                null,
+                null
+            );
         }
     }
 
@@ -119,23 +254,33 @@ class CustomValidation
     }
 
     /**
-     * Reject authCode values that look like pasted URL queries.
+     * Reject authCode values that look like a pasted URL query (contain & or =).
+     *
+     * @param mixed $request The request to validate
+     * @return void
+     * @throws ApiException if validation fails
      */
     private static function validateApplyTokenAuthCodeNotFromQueryString($request)
     {
-        if (!($request instanceof ApplyTokenRequest)) {
+        if ($request === null || !method_exists($request, 'getAuthCode')) {
             return;
         }
-        if (!method_exists($request, 'getAuthCode')) {
+        $authCode = $request->getAuthCode();
+        if ($authCode === null) {
             return;
         }
-        $authCode = trim((string) $request->getAuthCode());
+        self::validateAuthCodeNoQueryDelimiters((string) $authCode);
+    }
+
+    private static function validateAuthCodeNoQueryDelimiters(string $authCode): void
+    {
+        $authCode = trim($authCode);
         if ($authCode === '') {
             return;
         }
-        if (strpos($authCode, '&') !== false || strpos($authCode, '=') !== false) {
+        if (strpbrk($authCode, '&=') !== false) {
             throw new ApiException(
-                "authCode must not contain '&' or '='; paste only the authorization code value, not the full URL query string",
+                "authCode must not contain '&' or '='; paste only the authorization code value, not the full URL query string or including other parameters",
                 0,
                 null,
                 null

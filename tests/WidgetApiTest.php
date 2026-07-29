@@ -146,4 +146,80 @@ class WidgetApiTest extends TestCase
         }
     }
 
+    public function testWidgetPaymentRejectsEmptyProductCode(): void
+    {
+        $request = WidgetFixtures::getWidgetPaymentRequest();
+        $request->getAdditionalInfo()->setProductCode('');
+
+        try {
+            $this->apiInstance->widgetPayment($request);
+            $this->fail('Expected validation error when productCode is empty');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('productcode', strtolower($e->getMessage()));
+        }
+    }
+
+    public function testWidgetPaymentRejectsEmptyTerminalType(): void
+    {
+        $request = WidgetFixtures::getWidgetPaymentRequest();
+        $request->getAdditionalInfo()->getEnvInfo()->setTerminalType('');
+
+        try {
+            $this->apiInstance->widgetPayment($request);
+            $this->fail('Expected validation error when terminalType is empty');
+        } catch (\Dana\ApiException $e) {
+            $this->assertStringContainsString('terminaltype', strtolower($e->getMessage()));
+        }
+    }
+
+    public function testWidgetPaymentAllowsEmptyMcc(): void
+    {
+        $request = WidgetFixtures::getWidgetPaymentRequest();
+        $request->getAdditionalInfo()->setMcc('');
+
+        try {
+            $this->apiInstance->widgetPayment($request);
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertFalse(
+                str_contains($msg, 'mcc') && str_contains($msg, 'required'),
+                'mcc may be empty for Widget, got: ' . $e->getMessage()
+            );
+        }
+    }
+
+    public function testWidgetPaymentRejectsSandboxAmountOverMax(): void
+    {
+        $request = WidgetFixtures::getWidgetPaymentRequest();
+        $request->setAmount(new \Dana\Widget\v1\Model\Money([
+            'value' => '10000000.01',
+            'currency' => 'IDR',
+        ]));
+
+        try {
+            $this->apiInstance->widgetPayment($request);
+            $this->fail('Expected validation error when sandbox amount exceeds 10000000');
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertStringContainsString('amount', $msg);
+            $this->assertStringContainsString('10000000', $e->getMessage());
+        }
+    }
+
+    public function testWidgetPaymentDefaultsEmptySourcePlatformToIpg(): void
+    {
+        $request = WidgetFixtures::getWidgetPaymentRequest();
+        $request->getAdditionalInfo()->getEnvInfo()->setSourcePlatform('');
+
+        try {
+            $this->apiInstance->widgetPayment($request);
+        } catch (\Dana\ApiException $e) {
+            $msg = strtolower($e->getMessage());
+            $this->assertFalse(
+                str_contains($msg, 'sourceplatform') && str_contains($msg, 'required'),
+                'empty sourcePlatform should default to IPG, got: ' . $e->getMessage()
+            );
+        }
+    }
+
 }

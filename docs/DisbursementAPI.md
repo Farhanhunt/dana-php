@@ -383,14 +383,22 @@ try {
 
 ```php
 // Importing an enum class
-use Dana\Disbursement\v1\Enum\ChargeTarget;
+use Dana\Disbursement\v1\Enum\AccountType;
 
 // Using enum constants
-$model->setProperty(ChargeTarget::DIVISION);
+$model->setProperty(AccountType::MERCHANT_DEPOSIT_ACCOUNT);
 
 // Using enum values directly as strings
-$model->setProperty('DIVISION');
+$model->setProperty('MERCHANT_DEPOSIT_ACCOUNT');
 ```
+
+### AccountType
+
+| Constant | Value |
+|----------|-------|
+| `MERCHANT_DEPOSIT_ACCOUNT` | `MERCHANT_DEPOSIT_ACCOUNT` |
+| `SETTLEMENT_ACCOUNT` | `SETTLEMENT_ACCOUNT` |
+| `DIVISION_DEPOSIT_ACCOUNT` | `DIVISION_DEPOSIT_ACCOUNT` |
 
 ### ChargeTarget
 

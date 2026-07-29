@@ -197,7 +197,7 @@ class Util
             }
         }
 
-        return $baseUrl . '?' . http_build_query($urlParams);
+        return $baseUrl . '?' . http_build_query($urlParams, '', '&', PHP_QUERY_RFC3986);
     }
     
     /**

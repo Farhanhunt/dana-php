@@ -51,6 +51,18 @@ class TransferToBankRequest extends BaseModel
         return self::$openAPIModelName;
     }
 
+    public const ACCOUNT_TYPE_MERCHANT_DEPOSIT_ACCOUNT = 'MERCHANT_DEPOSIT_ACCOUNT';
+    public const ACCOUNT_TYPE_SETTLEMENT_ACCOUNT = 'SETTLEMENT_ACCOUNT';
+    public const ACCOUNT_TYPE_DIVISION_DEPOSIT_ACCOUNT = 'DIVISION_DEPOSIT_ACCOUNT';
+
+    public function getAccountTypeAllowableValues()
+    {
+        return [
+            self::ACCOUNT_TYPE_MERCHANT_DEPOSIT_ACCOUNT,
+            self::ACCOUNT_TYPE_SETTLEMENT_ACCOUNT,
+            self::ACCOUNT_TYPE_DIVISION_DEPOSIT_ACCOUNT,
+        ];
+    }
 
 
 
@@ -88,8 +100,17 @@ class TransferToBankRequest extends BaseModel
             $invalidProperties[] = "invalid value for 'customerNumber', the character length must be smaller than or equal to 32.";
         }
 
-        if (!is_null($this->container['accountType']) && (mb_strlen($this->container['accountType']) > 25)) {
-            $invalidProperties[] = "invalid value for 'accountType', the character length must be smaller than or equal to 25.";
+        $allowedValues = $this->getAccountTypeAllowableValues();
+        if (!is_null($this->container['accountType']) && !in_array($this->container['accountType'], $allowedValues, true)) {
+            $invalidProperties[] = sprintf(
+                "invalid value '%s' for 'accountType', must be one of '%s'",
+                $this->container['accountType'],
+                implode("', '", $allowedValues)
+            );
+        }
+
+        if (!is_null($this->container['accountType']) && (mb_strlen($this->container['accountType']) > 64)) {
+            $invalidProperties[] = "invalid value for 'accountType', the character length must be smaller than or equal to 64.";
         }
 
         if ($this->container['beneficiaryAccountNumber'] === null) {
@@ -165,8 +186,18 @@ class TransferToBankRequest extends BaseModel
         if (is_null($accountType)) {
             throw new \InvalidArgumentException('non-nullable accountType cannot be null');
         }
-        if ((mb_strlen($accountType) > 25)) {
-            throw new \InvalidArgumentException('invalid length for $accountType when calling TransferToBankRequest., must be smaller than or equal to 25.');
+        $allowedValues = $this->getAccountTypeAllowableValues();
+        if (!in_array($accountType, $allowedValues, true) && !empty($accountType)) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    "Invalid value '%s' for 'accountType', must be one of '%s'",
+                    $accountType,
+                    implode("', '", $allowedValues)
+                )
+            );
+        }
+        if ((mb_strlen($accountType) > 64)) {
+            throw new \InvalidArgumentException('invalid length for $accountType when calling TransferToBankRequest., must be smaller than or equal to 64.');
         }
 
         $this->container['accountType'] = $accountType;

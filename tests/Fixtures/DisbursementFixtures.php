@@ -225,6 +225,31 @@ class DisbursementFixtures
     }
 
     /**
+     * Generate dynamic transfer to DANA request with division charge fields for sandbox ignore tests
+     *
+     * @return TransferToDanaRequest
+     */
+    public static function getDynamicTransferToDanaRequestWithDivision(): TransferToDanaRequest
+    {
+        $additionalInfo = new TransferToDanaRequestAdditionalInfo([
+            'fundType' => 'AGENT_TOPUP_FOR_USER_SETTLE',
+            'accountType' => 'DANA_WALLET',
+            'externalDivisionId' => 'DIV123456',
+            'chargeTarget' => 'DIVISION',
+        ]);
+
+        return new TransferToDanaRequest([
+            'partnerReferenceNo' => self::generatePartnerReferenceNo('TOPUP-DIV-'),
+            'customerNumber' => '62811742234',
+            'amount' => self::createMoney('1.00'),
+            'feeAmount' => self::createMoney('1.00'),
+            'transactionDate' => self::getCurrentTransactionDate(),
+            'notes' => 'Test transfer to DANA with division',
+            'additionalInfo' => $additionalInfo
+        ]);
+    }
+
+    /**
      * Generate dynamic bank account inquiry request for unique test execution
      * 
      * @return BankAccountInquiryRequest

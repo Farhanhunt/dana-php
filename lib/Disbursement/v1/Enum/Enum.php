@@ -18,6 +18,24 @@
 
 namespace Dana\Disbursement\v1\Enum;
 
+class AccountType
+{
+    /**
+     * MERCHANT_DEPOSIT_ACCOUNT
+     */
+    const MERCHANT_DEPOSIT_ACCOUNT = "MERCHANT_DEPOSIT_ACCOUNT";
+
+    /**
+     * SETTLEMENT_ACCOUNT
+     */
+    const SETTLEMENT_ACCOUNT = "SETTLEMENT_ACCOUNT";
+
+    /**
+     * DIVISION_DEPOSIT_ACCOUNT
+     */
+    const DIVISION_DEPOSIT_ACCOUNT = "DIVISION_DEPOSIT_ACCOUNT";
+}
+
 class ChargeTarget
 {
     /**

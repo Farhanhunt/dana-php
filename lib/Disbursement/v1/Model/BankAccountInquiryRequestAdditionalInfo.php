@@ -53,12 +53,24 @@ class BankAccountInquiryRequestAdditionalInfo extends BaseModel
 
     public const CHARGE_TARGET_DIVISION = 'DIVISION';
     public const CHARGE_TARGET_MERCHANT = 'MERCHANT';
+    public const ACCOUNT_TYPE_MERCHANT_DEPOSIT_ACCOUNT = 'MERCHANT_DEPOSIT_ACCOUNT';
+    public const ACCOUNT_TYPE_SETTLEMENT_ACCOUNT = 'SETTLEMENT_ACCOUNT';
+    public const ACCOUNT_TYPE_DIVISION_DEPOSIT_ACCOUNT = 'DIVISION_DEPOSIT_ACCOUNT';
 
     public function getChargeTargetAllowableValues()
     {
         return [
             self::CHARGE_TARGET_DIVISION,
             self::CHARGE_TARGET_MERCHANT,
+        ];
+    }
+
+    public function getAccountTypeAllowableValues()
+    {
+        return [
+            self::ACCOUNT_TYPE_MERCHANT_DEPOSIT_ACCOUNT,
+            self::ACCOUNT_TYPE_SETTLEMENT_ACCOUNT,
+            self::ACCOUNT_TYPE_DIVISION_DEPOSIT_ACCOUNT,
         ];
     }
 
@@ -120,6 +132,15 @@ class BankAccountInquiryRequestAdditionalInfo extends BaseModel
 
         if (!is_null($this->container['beneficiaryAccountName']) && (mb_strlen($this->container['beneficiaryAccountName']) > 64)) {
             $invalidProperties[] = "invalid value for 'beneficiaryAccountName', the character length must be smaller than or equal to 64.";
+        }
+
+        $allowedValues = $this->getAccountTypeAllowableValues();
+        if (!is_null($this->container['accountType']) && !in_array($this->container['accountType'], $allowedValues, true)) {
+            $invalidProperties[] = sprintf(
+                "invalid value '%s' for 'accountType', must be one of '%s'",
+                $this->container['accountType'],
+                implode("', '", $allowedValues)
+            );
         }
 
         if (!is_null($this->container['accountType']) && (mb_strlen($this->container['accountType']) > 64)) {
@@ -249,6 +270,16 @@ class BankAccountInquiryRequestAdditionalInfo extends BaseModel
     {
         if (is_null($accountType)) {
             throw new \InvalidArgumentException('non-nullable accountType cannot be null');
+        }
+        $allowedValues = $this->getAccountTypeAllowableValues();
+        if (!in_array($accountType, $allowedValues, true) && !empty($accountType)) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    "Invalid value '%s' for 'accountType', must be one of '%s'",
+                    $accountType,
+                    implode("', '", $allowedValues)
+                )
+            );
         }
         if ((mb_strlen($accountType) > 64)) {
             throw new \InvalidArgumentException('invalid length for $accountType when calling BankAccountInquiryRequestAdditionalInfo., must be smaller than or equal to 64.');

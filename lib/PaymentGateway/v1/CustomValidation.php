@@ -26,6 +26,7 @@ use Dana\Utils\DateValidation;
 use Dana\PaymentGateway\v1\Model\CreateOrderByApiRequest;
 use Dana\PaymentGateway\v1\Model\PayOptionDetail;
 use Dana\PaymentGateway\v1\Model\CreateOrderByRedirectRequest;
+use Dana\PaymentGateway\v1\Model\EnvInfo;
 
 /**
  * CustomValidation Class
@@ -43,21 +44,32 @@ class CustomValidation
     /** Money value pattern: digits (1-16) + "." + exactly 2 digits (e.g. 10000.00) */
     private const MONEY_VALUE_PATTERN = '/^\d{1,16}\.\d{2}$/';
 
+    /** Sandbox maximum amount (major units) for Payment Gateway create order. */
+    private const SANDBOX_MAX_AMOUNT = 10000000;
+
     private static $validationRegistry = [
         'Dana\PaymentGateway\v1\Model\CreateOrderByApiRequest' => [
+            'defaultSourcePlatform',
             'validateAdditionalInfoRequired',
+            'validateRequiredAdditionalInfoFieldsNotEmpty',
             'validateMoneyValuePattern',
+            'validateSandboxAmount',
             'validateValidUpToCreateOrderRequest',
             'validateExternalStoreIdForQris',
-            'validateConditionalPayOptionAdditionalInfoCreateOrderRequest',
+            'validatePartnerReferenceNoForQris',
+            'validateConditionalPayOptionAdditionalInfo',
             'validateSandboxPayMethodAndPayOption',
-            'validateOptionalFieldsWithRequiredNestedCreateOrderRequest',
+            'validateOptionalFieldsWithRequiredNested',
         ],
         'Dana\PaymentGateway\v1\Model\CreateOrderByRedirectRequest' => [
+            'defaultSourcePlatform',
             'validateAdditionalInfoRequired',
+            'validateRequiredAdditionalInfoFieldsNotEmpty',
             'validateMoneyValuePattern',
+            'validateSandboxAmount',
             'validateValidUpToCreateOrderRequest',
             'validateSandboxPayMethodAndPayOption',
+            'validateOptionalFieldsWithRequiredNested',
         ],
         // Add more request types and their validations here as needed
     ];
@@ -80,7 +92,7 @@ class CustomValidation
 
         // Get the class name of the request
         $className = get_class($request);
-        
+
         if ($request instanceof CreateOrderByApiRequest) {
             $className = 'Dana\PaymentGateway\v1\Model\CreateOrderByApiRequest';
         } elseif ($request instanceof CreateOrderByRedirectRequest) {
@@ -88,26 +100,184 @@ class CustomValidation
         }
 
         // Check if this request type has validations registered
-        if (isset(self::$validationRegistry[$className])) {
-            $validationErrors = [];
-            foreach (self::$validationRegistry[$className] as $validatorName) {
-                if (method_exists(self::class, $validatorName)) {
-                    try {
-                        self::$validatorName($request);
-                    } catch (ApiException $e) {
-                        $validationErrors[] = $e->getMessage();
-                    }
-                }
+        if (!isset(self::$validationRegistry[$className])) {
+            return;
+        }
+
+        $messages = [];
+        foreach (self::$validationRegistry[$className] as $validatorName) {
+            if (!method_exists(self::class, $validatorName)) {
+                continue;
             }
-            if (!empty($validationErrors)) {
-                throw new ApiException(
-                    'validation failed: ' . implode('; ', $validationErrors),
-                    0,
-                    null,
-                    null
+            try {
+                self::$validatorName($request);
+            } catch (ApiException $e) {
+                $messages[] = $e->getMessage();
+            }
+        }
+
+        if (!empty($messages)) {
+            throw new ApiException(
+                'validation failed: ' . implode('; ', $messages),
+                0,
+                null,
+                null
+            );
+        }
+    }
+
+    private const SANDBOX_QRIS_GUIDANCE_HINT_SUCCESS =
+        'If you want to use QRIS and it is not showing in payment methods, make sure you already fill externalStoreId. See https://dashboard.dana.id/sandbox/submerchants in the external shop id section.';
+
+    private const SANDBOX_QRIS_GUIDANCE_HINT_ERROR =
+        'If you want to use QRIS, make sure you fill externalStoreId. See https://dashboard.dana.id/sandbox/submerchants in the external shop id section. For QRIS, partnerReferenceNo max is 25 chars.';
+
+    private const SANDBOX_SUB_MERCHANT_ID_GUIDANCE_HINT =
+        'Make sure your subMerchantId exists. You can see it at https://dashboard.dana.id/sandbox/submerchants in the External Division ID section.';
+
+    /**
+     * Augment CreateOrder responses in sandbox (QRIS / subMerchantId guidance).
+     *
+     * @param mixed $request
+     * @param mixed $response
+     * @return void
+     */
+    public static function processResponse($request, $response)
+    {
+        if (!self::isSandbox() || $request === null || $response === null) {
+            return;
+        }
+        if (!method_exists($response, 'getResponseMessage') || !method_exists($response, 'offsetSet')) {
+            return;
+        }
+
+        if ($request instanceof CreateOrderByRedirectRequest) {
+            $externalStoreId = method_exists($request, 'getExternalStoreId')
+                ? $request->getExternalStoreId()
+                : null;
+            if ($externalStoreId === null || trim((string) $externalStoreId) === '') {
+                $response->offsetSet(
+                    'responseMessage',
+                    self::appendSandboxHint(
+                        $response->getResponseMessage(),
+                        self::SANDBOX_QRIS_GUIDANCE_HINT_SUCCESS,
+                        'externalstoreid'
+                    )
                 );
             }
         }
+
+        $subMerchantId = null;
+        if (method_exists($request, 'getSubMerchantId')) {
+            $subMerchantId = $request->getSubMerchantId();
+        }
+        if ($subMerchantId !== null && trim((string) $subMerchantId) !== '') {
+            $responseCode = method_exists($response, 'getResponseCode') ? (string) $response->getResponseCode() : '';
+            if (self::isBusinessErrorResponse($responseCode)) {
+                $response->offsetSet(
+                    'responseMessage',
+                    self::appendSandboxHint(
+                        $response->getResponseMessage(),
+                        self::SANDBOX_SUB_MERCHANT_ID_GUIDANCE_HINT,
+                        'submerchantid',
+                        'externaldivisionid'
+                    )
+                );
+            }
+        }
+    }
+
+    /**
+     * Enrich CreateOrder HTTP errors in sandbox (keeps exception; updates response object / message).
+     *
+     * @param mixed $request
+     * @param ApiException $e
+     * @return ApiException
+     */
+    public static function enrichCreateOrderError($request, ApiException $e)
+    {
+        if (!self::isSandbox() || $request === null) {
+            return $e;
+        }
+
+        $body = (string) $e->getResponseBody();
+        if ($body === '') {
+            return $e;
+        }
+
+        try {
+            $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $ignore) {
+            return $e;
+        }
+        if (!is_array($payload)) {
+            return $e;
+        }
+
+        $response = new \Dana\PaymentGateway\v1\Model\CreateOrderResponse([
+            'responseCode' => isset($payload['responseCode']) ? (string) $payload['responseCode'] : '',
+            'responseMessage' => isset($payload['responseMessage']) ? (string) $payload['responseMessage'] : '',
+            'partnerReferenceNo' => isset($payload['partnerReferenceNo']) ? (string) $payload['partnerReferenceNo'] : '',
+        ]);
+
+        self::processResponse($request, $response);
+
+        $errMsg = $e->getMessage();
+        if ($request instanceof CreateOrderByRedirectRequest) {
+            $externalStoreId = method_exists($request, 'getExternalStoreId')
+                ? $request->getExternalStoreId()
+                : null;
+            if ($externalStoreId === null || trim((string) $externalStoreId) === '') {
+                $hinted = self::appendSandboxHint(
+                    '',
+                    self::SANDBOX_QRIS_GUIDANCE_HINT_ERROR,
+                    'externalstoreid',
+                    'partnerreferenceno'
+                );
+                $errMsg = $e->getCode() . ': ' . $hinted;
+            }
+        }
+
+        $enriched = new ApiException(
+            $errMsg,
+            $e->getCode(),
+            $e->getResponseHeaders(),
+            $e->getResponseBody()
+        );
+        $enriched->setResponseObject($response);
+        return $enriched;
+    }
+
+    private static function isBusinessErrorResponse(string $responseCode): bool
+    {
+        $code = trim($responseCode);
+        return $code === '' || strpos($code, '200') !== 0;
+    }
+
+    /**
+     * Always append hint (Go-compatible). Uses markers to avoid duplicates.
+     *
+     * @param string|null $responseMessage
+     * @param string $hint
+     * @param string ...$alreadyPresentMarkers
+     * @return string
+     */
+    private static function appendSandboxHint($responseMessage, string $hint, string ...$alreadyPresentMarkers): string
+    {
+        $msg = trim((string) $responseMessage);
+        $lowerMsg = strtolower($msg);
+        foreach ($alreadyPresentMarkers as $marker) {
+            if ($marker !== '' && strpos($lowerMsg, strtolower($marker)) !== false) {
+                return $msg;
+            }
+        }
+        if ($msg === '') {
+            return $hint;
+        }
+        if (substr($msg, -1) === '.') {
+            return $msg . ' ' . $hint;
+        }
+        return $msg . '. ' . $hint;
     }
 
     /**
@@ -129,6 +299,74 @@ class CustomValidation
                 null,
                 null
             );
+        }
+    }
+
+    /**
+     * Default envInfo.sourcePlatform to IPG when missing/empty.
+     *
+     * @param mixed $request The request to mutate
+     * @return void
+     */
+    private static function defaultSourcePlatform($request)
+    {
+        if ($request === null || !method_exists($request, 'getAdditionalInfo')) {
+            return;
+        }
+        $additionalInfo = $request->getAdditionalInfo();
+        if ($additionalInfo === null || !method_exists($additionalInfo, 'getEnvInfo')) {
+            return;
+        }
+        $envInfo = $additionalInfo->getEnvInfo();
+        if ($envInfo === null || !method_exists($envInfo, 'getSourcePlatform') || !method_exists($envInfo, 'setSourcePlatform')) {
+            return;
+        }
+        $sourcePlatform = $envInfo->getSourcePlatform();
+        if ($sourcePlatform === null || trim((string) $sourcePlatform) === '') {
+            $envInfo->setSourcePlatform(EnvInfo::SOURCE_PLATFORM_IPG);
+        }
+    }
+
+    /**
+     * Reject empty strings for required additionalInfo fields (mcc, envInfo.terminalType).
+     *
+     * @param mixed $request The request to validate
+     * @return void
+     * @throws ApiException if validation fails
+     */
+    private static function validateRequiredAdditionalInfoFieldsNotEmpty($request)
+    {
+        if ($request === null || !method_exists($request, 'getAdditionalInfo')) {
+            return;
+        }
+        $additionalInfo = $request->getAdditionalInfo();
+        if ($additionalInfo === null) {
+            return;
+        }
+        if (method_exists($additionalInfo, 'getMcc')) {
+            $mcc = $additionalInfo->getMcc();
+            if ($mcc === null || trim((string) $mcc) === '') {
+                throw new ApiException(
+                    'additionalInfo.mcc is required and cannot be empty',
+                    0,
+                    null,
+                    null
+                );
+            }
+        }
+        if (method_exists($additionalInfo, 'getEnvInfo')) {
+            $envInfo = $additionalInfo->getEnvInfo();
+            $terminalType = ($envInfo !== null && method_exists($envInfo, 'getTerminalType'))
+                ? $envInfo->getTerminalType()
+                : null;
+            if ($terminalType === null || trim((string) $terminalType) === '') {
+                throw new ApiException(
+                    'additionalInfo.envInfo.terminalType is required and cannot be empty',
+                    0,
+                    null,
+                    null
+                );
+            }
         }
     }
 
@@ -163,6 +401,42 @@ class CustomValidation
         if (!preg_match(self::MONEY_VALUE_PATTERN, $value)) {
             throw new ApiException(
                 'amount.value must match pattern (e.g. 10000.00): got ' . $value,
+                0,
+                null,
+                null
+            );
+        }
+    }
+
+    /**
+     * In sandbox, amount.value must not exceed SANDBOX_MAX_AMOUNT.
+     *
+     * @param mixed $request The request to validate
+     * @return void
+     * @throws ApiException if validation fails
+     */
+    private static function validateSandboxAmount($request)
+    {
+        if ($request === null || !self::isSandbox()) {
+            return;
+        }
+        if (!method_exists($request, 'getAmount')) {
+            return;
+        }
+        $amount = $request->getAmount();
+        if ($amount === null || !method_exists($amount, 'getValue')) {
+            return;
+        }
+        $value = $amount->getValue();
+        if ($value === null || trim((string) $value) === '') {
+            return;
+        }
+        if (!is_numeric($value)) {
+            return;
+        }
+        if ((float) $value > self::SANDBOX_MAX_AMOUNT) {
+            throw new ApiException(
+                'in sandbox, amount.value must not exceed ' . self::SANDBOX_MAX_AMOUNT . '; got ' . $value,
                 0,
                 null,
                 null
@@ -255,11 +529,137 @@ class CustomValidation
         }
     }
 
+    /**
+     * Validate that partnerReferenceNo must be at most 25 characters when payOption is NETWORK_PAY_PG_QRIS
+     *
+     * @param mixed $request The request to validate
+     * @return void
+     * @throws ApiException if validation fails
+     */
+    private static function validatePartnerReferenceNoForQris($request)
+    {
+        if ($request === null || !($request instanceof CreateOrderByApiRequest)) {
+            return;
+        }
+
+        $payOptionDetails = method_exists($request, 'getPayOptionDetails') ? $request->getPayOptionDetails() : null;
+        if (!is_array($payOptionDetails) || empty($payOptionDetails)) {
+            return;
+        }
+
+        $hasQris = false;
+        foreach ($payOptionDetails as $payOptionDetail) {
+            if ($payOptionDetail !== null
+                && method_exists($payOptionDetail, 'getPayOption')
+                && $payOptionDetail->getPayOption() === 'NETWORK_PAY_PG_QRIS'
+            ) {
+                $hasQris = true;
+                break;
+            }
+        }
+        if (!$hasQris) {
+            return;
+        }
+
+        $partnerReferenceNo = method_exists($request, 'getPartnerReferenceNo')
+            ? trim((string) $request->getPartnerReferenceNo())
+            : '';
+        if (strlen($partnerReferenceNo) > 25) {
+            throw new ApiException(
+                'partnerReferenceNo must be at most 25 characters when payOption is NETWORK_PAY_PG_QRIS',
+                0,
+                null,
+                null
+            );
+        }
+    }
+
+    private static function isCardPayment(string $payMethod, string $payOption): bool
+    {
+        if ($payMethod === PayOptionDetail::PAY_METHOD_CARD
+            || $payMethod === PayOptionDetail::PAY_METHOD_CREDIT_CARD
+        ) {
+            return true;
+        }
+        return $payOption === PayOptionDetail::PAY_OPTION_NETWORK_PAY_PG_CARD;
+    }
+
+    private static function isEwalletPayment(string $payOption): bool
+    {
+        return in_array($payOption, [
+            PayOptionDetail::PAY_OPTION_NETWORK_PAY_PG_SPAY,
+            PayOptionDetail::PAY_OPTION_NETWORK_PAY_PG_OVO,
+            PayOptionDetail::PAY_OPTION_NETWORK_PAY_PG_GOPAY,
+            PayOptionDetail::PAY_OPTION_NETWORK_PAY_PG_LINKAJA,
+        ], true);
+    }
+
+    /**
+     * phoneNumber is required for Card and e-wallet payments, and must be 1-15 characters.
+     * Card: payMethod CARD / CREDIT_CARD or payOption NETWORK_PAY_PG_CARD
+     * E-wallet: payOption NETWORK_PAY_PG_{SPAY,OVO,GOPAY,LINKAJA}
+     *
+     * @param mixed $request The request to validate
+     * @return void
+     * @throws ApiException if validation fails
+     */
+    private static function validateConditionalPayOptionAdditionalInfo($request)
+    {
+        if ($request === null || !($request instanceof CreateOrderByApiRequest)) {
+            return;
+        }
+        if (!method_exists($request, 'getPayOptionDetails')) {
+            return;
+        }
+        $payOptionDetails = $request->getPayOptionDetails();
+        if (!is_array($payOptionDetails) || empty($payOptionDetails)) {
+            return;
+        }
+
+        foreach ($payOptionDetails as $idx => $payOptionDetail) {
+            if ($payOptionDetail === null) {
+                continue;
+            }
+            $payMethod = method_exists($payOptionDetail, 'getPayMethod') ? $payOptionDetail->getPayMethod() : null;
+            $payOption = method_exists($payOptionDetail, 'getPayOption') ? $payOptionDetail->getPayOption() : null;
+            $payMethodStr = $payMethod !== null ? trim((string) $payMethod) : '';
+            $payOptionStr = $payOption !== null ? trim((string) $payOption) : '';
+
+            $phoneNumber = '';
+            if (method_exists($payOptionDetail, 'getAdditionalInfo')) {
+                $additional = $payOptionDetail->getAdditionalInfo();
+                if ($additional !== null && method_exists($additional, 'getPhoneNumber')) {
+                    $phoneNumber = trim((string) ($additional->getPhoneNumber() ?? ''));
+                }
+            }
+
+            if (self::isCardPayment($payMethodStr, $payOptionStr) || self::isEwalletPayment($payOptionStr)) {
+                if ($phoneNumber === '') {
+                    throw new ApiException(
+                        "phoneNumber is required for card/e-wallet payment (payOptionDetails[{$idx}])",
+                        0,
+                        null,
+                        null
+                    );
+                }
+                $len = mb_strlen($phoneNumber);
+                if ($len < 1 || $len > 15) {
+                    throw new ApiException(
+                        "phoneNumber must be between 1 and 15 characters (payOptionDetails[{$idx}])",
+                        0,
+                        null,
+                        null
+                    );
+                }
+            }
+        }
+    }
+
     /** In sandbox, only these payMethods are available (Payment Gateway). */
     private const SANDBOX_ALLOWED_PAY_METHODS = ['BALANCE', 'CREDIT_CARD', 'DEBIT_CARD', 'VIRTUAL_ACCOUNT', 'NETWORK_PAY'];
 
     /** In sandbox, only these payOptions are available (exact or suffix e.g. VIRTUAL_ACCOUNT_BRI). */
-    private const SANDBOX_ALLOWED_PAY_OPTIONS = ['CARD', 'QRIS', 'BRI', 'PANI', 'CIMB', 'MANDIRI', 'BTPN', 'BSI_PAYMENT'];
+    private const SANDBOX_ALLOWED_PAY_OPTIONS = ['CARD', 'QRIS', 'BRI', 'PANI', 'CIMB', 'BTPN', 'BSI_PAYMENT'];
 
     private static function isSandbox(): bool
     {
@@ -339,95 +739,17 @@ class CustomValidation
         }
     }
 
-    private static function normalizeValue($value): string
-    {
-        if ($value === null) {
-            return '';
-        }
-        if (is_object($value) && method_exists($value, 'getValue')) {
-            $value = $value->getValue();
-        }
-        return trim((string) $value);
-    }
-
-    private static function isCardPayment(string $payMethod, string $payOption): bool
-    {
-        $payMethod = trim($payMethod);
-        $payOption = trim($payOption);
-        return in_array($payMethod, ['CARD', 'CREDIT_CARD'], true) || $payOption === 'NETWORK_PAY_PG_CARD';
-    }
-
-    private static function isEwalletPayment(string $payOption): bool
-    {
-        return in_array(trim($payOption), [
-            'NETWORK_PAY_PG_SPAY',
-            'NETWORK_PAY_PG_OVO',
-            'NETWORK_PAY_PG_GOPAY',
-            'NETWORK_PAY_PG_LINKAJA',
-        ], true);
-    }
-
-    private static function isVirtualAccountPayMethod(string $payMethod): bool
-    {
-        return trim($payMethod) === 'VIRTUAL_ACCOUNT';
-    }
-
     /**
-     * Enforce conditional fields in createOrderByApiRequest.payOptionDetails[].additionalInfo.
+     * When optional nested objects are present, require their mandatory sub-fields.
+     * When goods is filled, all Goods required fields must be non-empty.
+     *
+     * @param mixed $request The request to validate
+     * @return void
+     * @throws ApiException if validation fails
      */
-    private static function validateConditionalPayOptionAdditionalInfoCreateOrderRequest($request)
+    private static function validateOptionalFieldsWithRequiredNested($request)
     {
-        if (!($request instanceof CreateOrderByApiRequest)) {
-            return;
-        }
-        if (!method_exists($request, 'getPayOptionDetails')) {
-            return;
-        }
-        $payOptionDetails = $request->getPayOptionDetails();
-        if (!is_array($payOptionDetails) || empty($payOptionDetails)) {
-            return;
-        }
-
-        foreach ($payOptionDetails as $idx => $payOptionDetail) {
-            if ($payOptionDetail === null) {
-                continue;
-            }
-            $payMethod = method_exists($payOptionDetail, 'getPayMethod')
-                ? self::normalizeValue($payOptionDetail->getPayMethod())
-                : '';
-            $payOption = method_exists($payOptionDetail, 'getPayOption')
-                ? self::normalizeValue($payOptionDetail->getPayOption())
-                : '';
-
-            $additionalInfo = method_exists($payOptionDetail, 'getAdditionalInfo')
-                ? $payOptionDetail->getAdditionalInfo()
-                : null;
-            $phoneNumber = ($additionalInfo !== null && method_exists($additionalInfo, 'getPhoneNumber'))
-                ? trim((string) $additionalInfo->getPhoneNumber())
-                : '';
-
-            if (self::isCardPayment($payMethod, $payOption) || self::isEwalletPayment($payOption)) {
-                if ($phoneNumber === '') {
-                    throw new ApiException("phoneNumber is required for card/e-wallet payment (payOptionDetails[{$idx}])", 0, null, null);
-                }
-                $phoneLen = mb_strlen($phoneNumber);
-                if ($phoneLen < 1 || $phoneLen > 15) {
-                    throw new ApiException("phoneNumber must be between 1 and 15 characters (payOptionDetails[{$idx}])", 0, null, null);
-                }
-            }
-
-        }
-    }
-
-    /**
-     * Validate required nested fields when optional nested objects are present.
-     */
-    private static function validateOptionalFieldsWithRequiredNestedCreateOrderRequest($request)
-    {
-        if (!($request instanceof CreateOrderByApiRequest)) {
-            return;
-        }
-        if (!method_exists($request, 'getAdditionalInfo')) {
+        if ($request === null || !method_exists($request, 'getAdditionalInfo')) {
             return;
         }
         $additionalInfo = $request->getAdditionalInfo();
@@ -442,39 +764,95 @@ class CustomValidation
         if (method_exists($order, 'getBuyer')) {
             $buyer = $order->getBuyer();
             if ($buyer !== null) {
-                $externalUserId = method_exists($buyer, 'getExternalUserId') ? trim((string) $buyer->getExternalUserId()) : '';
-                $externalUserType = method_exists($buyer, 'getExternalUserType') ? trim((string) $buyer->getExternalUserType()) : '';
-                if ($externalUserId !== '' && $externalUserType === '') {
-                    throw new ApiException('buyer.externalUserType is required when buyer.externalUserId is provided', 0, null, null);
+                $extType = method_exists($buyer, 'getExternalUserType') ? trim((string) $buyer->getExternalUserType()) : '';
+                $extId = method_exists($buyer, 'getExternalUserId') ? trim((string) $buyer->getExternalUserId()) : '';
+                if ($extId !== '' && $extType === '') {
+                    throw new ApiException(
+                        'additionalInfo.order.buyer.externalUserType is required when externalUserId is filled',
+                        0,
+                        null,
+                        null
+                    );
+                }
+                if ($extType !== '' && $extId === '') {
+                    throw new ApiException(
+                        'additionalInfo.order.buyer.externalUserId is required when externalUserType is filled',
+                        0,
+                        null,
+                        null
+                    );
                 }
             }
         }
 
         if (method_exists($order, 'getGoods')) {
-            $goodsList = $order->getGoods();
-            if (is_array($goodsList)) {
-                foreach ($goodsList as $idx => $goods) {
-                    if ($goods === null) {
+            $goods = $order->getGoods();
+            if (is_array($goods) && !empty($goods)) {
+                foreach ($goods as $i => $g) {
+                    if ($g === null) {
                         continue;
                     }
-                    $name = method_exists($goods, 'getName') ? trim((string) $goods->getName()) : '';
+                    $prefix = "additionalInfo.order.goods[{$i}]";
+                    $name = method_exists($g, 'getName') ? trim((string) $g->getName()) : '';
                     if ($name === '') {
-                        throw new ApiException("goods[{$idx}].name is required when goods is provided", 0, null, null);
+                        throw new ApiException("{$prefix}.name is required when goods is filled", 0, null, null);
+                    }
+                    $merchantGoodsId = method_exists($g, 'getMerchantGoodsId') ? trim((string) $g->getMerchantGoodsId()) : '';
+                    if ($merchantGoodsId === '') {
+                        throw new ApiException("{$prefix}.merchantGoodsId is required when goods is filled", 0, null, null);
+                    }
+                    $description = method_exists($g, 'getDescription') ? trim((string) $g->getDescription()) : '';
+                    if ($description === '') {
+                        throw new ApiException("{$prefix}.description is required when goods is filled", 0, null, null);
+                    }
+                    $category = method_exists($g, 'getCategory') ? trim((string) $g->getCategory()) : '';
+                    if ($category === '') {
+                        throw new ApiException("{$prefix}.category is required when goods is filled", 0, null, null);
+                    }
+                    $quantity = method_exists($g, 'getQuantity') ? trim((string) $g->getQuantity()) : '';
+                    if ($quantity === '') {
+                        throw new ApiException("{$prefix}.quantity is required when goods is filled", 0, null, null);
+                    }
+                    $price = method_exists($g, 'getPrice') ? $g->getPrice() : null;
+                    $priceValue = ($price !== null && method_exists($price, 'getValue')) ? trim((string) $price->getValue()) : '';
+                    $priceCurrency = ($price !== null && method_exists($price, 'getCurrency')) ? trim((string) $price->getCurrency()) : '';
+                    if ($priceValue === '') {
+                        throw new ApiException("{$prefix}.price.value is required when goods is filled", 0, null, null);
+                    }
+                    if ($priceCurrency === '') {
+                        throw new ApiException("{$prefix}.price.currency is required when goods is filled", 0, null, null);
                     }
                 }
             }
         }
 
         if (method_exists($order, 'getShippingInfo')) {
-            $shippingInfos = $order->getShippingInfo();
-            if (is_array($shippingInfos)) {
-                foreach ($shippingInfos as $idx => $shippingInfo) {
-                    if ($shippingInfo === null) {
+            $shippingInfo = $order->getShippingInfo();
+            if (is_array($shippingInfo) && !empty($shippingInfo)) {
+                foreach ($shippingInfo as $i => $s) {
+                    if ($s === null) {
                         continue;
                     }
-                    $firstName = method_exists($shippingInfo, 'getFirstName') ? trim((string) $shippingInfo->getFirstName()) : '';
-                    if ($firstName === '') {
-                        throw new ApiException("shippingInfo[{$idx}].firstName is required when shippingInfo is provided", 0, null, null);
+                    $prefix = "additionalInfo.order.shippingInfo[{$i}]";
+                    $requiredFields = [
+                        'merchantShippingId' => method_exists($s, 'getMerchantShippingId') ? trim((string) $s->getMerchantShippingId()) : '',
+                        'countryName' => method_exists($s, 'getCountryName') ? trim((string) $s->getCountryName()) : '',
+                        'stateName' => method_exists($s, 'getStateName') ? trim((string) $s->getStateName()) : '',
+                        'cityName' => method_exists($s, 'getCityName') ? trim((string) $s->getCityName()) : '',
+                        'address1' => method_exists($s, 'getAddress1') ? trim((string) $s->getAddress1()) : '',
+                        'firstName' => method_exists($s, 'getFirstName') ? trim((string) $s->getFirstName()) : '',
+                        'lastName' => method_exists($s, 'getLastName') ? trim((string) $s->getLastName()) : '',
+                        'zipCode' => method_exists($s, 'getZipCode') ? trim((string) $s->getZipCode()) : '',
+                    ];
+                    foreach ($requiredFields as $field => $value) {
+                        if ($value === '') {
+                            throw new ApiException(
+                                "{$prefix}.{$field} is required when shippingInfo is filled",
+                                0,
+                                null,
+                                null
+                            );
+                        }
                     }
                 }
             }

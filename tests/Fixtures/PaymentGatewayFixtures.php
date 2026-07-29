@@ -20,6 +20,8 @@ use Dana\PaymentGateway\v1\Model\RefundOrderRequest;
 use Dana\PaymentGateway\v1\Model\ConsultPayRequestAdditionalInfo;
 use Dana\PaymentGateway\v1\Model\CreateOrderByApiAdditionalInfo;
 use Dana\PaymentGateway\v1\Model\CreateOrderByApiRequest;
+use Dana\PaymentGateway\v1\Model\CreateOrderByRedirectAdditionalInfo;
+use Dana\PaymentGateway\v1\Model\CreateOrderByRedirectRequest;
 use Dana\PaymentGateway\v1\Model\EnvInfo;
 use Dana\PaymentGateway\v1\Model\Goods;
 use Dana\PaymentGateway\v1\Model\Money;
@@ -268,6 +270,42 @@ class PaymentGatewayFixtures
                 ])
             ],
             // additionalInfo intentionally omitted
+        ]);
+    }
+
+    /**
+     * Get a CreateOrderByRedirectRequest fixture without externalStoreId.
+     *
+     * @return CreateOrderByRedirectRequest
+     */
+    public static function getCreateOrderByRedirectRequest(): CreateOrderByRedirectRequest
+    {
+        $validUpTo = (new \DateTime('now', new \DateTimeZone('Asia/Jakarta')))
+            ->add(new \DateInterval('PT10M'))
+            ->format('Y-m-d\TH:i:s+07:00');
+
+        return new CreateOrderByRedirectRequest([
+            'partnerReferenceNo' => self::generatePartnerReferenceNo(),
+            'merchantId' => self::getMerchantId(),
+            'amount' => new Money([
+                'value' => '222000.00',
+                'currency' => 'IDR'
+            ]),
+            'validUpTo' => $validUpTo,
+            'urlParams' => [
+                new UrlParam([
+                    'url' => 'https://tinknet.my.id/v1/test',
+                    'type' => UrlParam::TYPE_PAY_RETURN,
+                    'isDeeplink' => 'Y'
+                ])
+            ],
+            'additionalInfo' => new CreateOrderByRedirectAdditionalInfo([
+                'mcc' => '5732',
+                'envInfo' => new EnvInfo([
+                    'sourcePlatform' => SourcePlatform::IPG,
+                    'terminalType' => TerminalType::SYSTEM
+                ])
+            ])
         ]);
     }
     

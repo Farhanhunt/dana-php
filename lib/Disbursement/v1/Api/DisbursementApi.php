@@ -39,6 +39,7 @@ use Dana\Configuration;
 use Dana\HeaderSelector;
 use Dana\ObjectSerializer;
 use Dana\Utils\SnapHeader;
+use Dana\Disbursement\v1\CustomValidation;
 
 /**
  * DisbursementApi Class Doc Comment
@@ -218,8 +219,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\BankAccountInquiryResponse', []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($bankAccountInquiryRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\BankAccountInquiryResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -260,8 +263,10 @@ class DisbursementApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\Disbursement\v1\CustomValidation::processResponse($bankAccountInquiryRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -277,7 +282,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($bankAccountInquiryRequest, $e);
         }
     }
 
@@ -321,7 +326,7 @@ class DisbursementApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $bankAccountInquiryRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -331,8 +336,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($bankAccountInquiryRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -373,6 +380,16 @@ class DisbursementApi
             );
         }
 
+
+        // Run custom validations / sandbox mutations
+        // This validation runs even when structs are created directly (bypassing setters)
+        try {
+            \Dana\Disbursement\v1\CustomValidation::validate($bankAccountInquiryRequest);
+        } catch (\Dana\ApiException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new \InvalidArgumentException('Custom validation failed: ' . $e->getMessage());
+        }
 
         $resourcePath = '/v1.0/emoney/bank-account-inquiry.htm';
         $formParams = [];
@@ -549,8 +566,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\DanaAccountInquiryResponse', []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($danaAccountInquiryRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\DanaAccountInquiryResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -591,8 +610,10 @@ class DisbursementApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\Disbursement\v1\CustomValidation::processResponse($danaAccountInquiryRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -608,7 +629,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($danaAccountInquiryRequest, $e);
         }
     }
 
@@ -652,7 +673,7 @@ class DisbursementApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $danaAccountInquiryRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -662,8 +683,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($danaAccountInquiryRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -704,6 +727,16 @@ class DisbursementApi
             );
         }
 
+
+        // Run custom validations / sandbox mutations
+        // This validation runs even when structs are created directly (bypassing setters)
+        try {
+            \Dana\Disbursement\v1\CustomValidation::validate($danaAccountInquiryRequest);
+        } catch (\Dana\ApiException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new \InvalidArgumentException('Custom validation failed: ' . $e->getMessage());
+        }
 
         $resourcePath = '/rest/v1.0/emoney/account-inquiry';
         $formParams = [];
@@ -880,8 +913,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToBankResponse', []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToBankRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToBankResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -907,8 +942,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToBankResponse', []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToBankRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToBankResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -949,8 +986,10 @@ class DisbursementApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\Disbursement\v1\CustomValidation::processResponse($transferToBankRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -974,7 +1013,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($transferToBankRequest, $e);
         }
     }
 
@@ -1018,7 +1057,7 @@ class DisbursementApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $transferToBankRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -1028,8 +1067,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToBankRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1070,6 +1111,16 @@ class DisbursementApi
             );
         }
 
+
+        // Run custom validations / sandbox mutations
+        // This validation runs even when structs are created directly (bypassing setters)
+        try {
+            \Dana\Disbursement\v1\CustomValidation::validate($transferToBankRequest);
+        } catch (\Dana\ApiException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new \InvalidArgumentException('Custom validation failed: ' . $e->getMessage());
+        }
 
         $resourcePath = '/v1.0/emoney/transfer-bank.htm';
         $formParams = [];
@@ -1246,8 +1297,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToBankInquiryStatusResponse', []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToBankInquiryStatusRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToBankInquiryStatusResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1288,8 +1341,10 @@ class DisbursementApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\Disbursement\v1\CustomValidation::processResponse($transferToBankInquiryStatusRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -1305,7 +1360,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($transferToBankInquiryStatusRequest, $e);
         }
     }
 
@@ -1349,7 +1404,7 @@ class DisbursementApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $transferToBankInquiryStatusRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -1359,8 +1414,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToBankInquiryStatusRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1401,6 +1458,16 @@ class DisbursementApi
             );
         }
 
+
+        // Run custom validations / sandbox mutations
+        // This validation runs even when structs are created directly (bypassing setters)
+        try {
+            \Dana\Disbursement\v1\CustomValidation::validate($transferToBankInquiryStatusRequest);
+        } catch (\Dana\ApiException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new \InvalidArgumentException('Custom validation failed: ' . $e->getMessage());
+        }
 
         $resourcePath = '/v1.0/emoney/transfer-bank-status.htm';
         $formParams = [];
@@ -1577,8 +1644,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToDanaResponse', []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToDanaRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToDanaResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1619,8 +1688,10 @@ class DisbursementApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\Disbursement\v1\CustomValidation::processResponse($transferToDanaRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -1636,7 +1707,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($transferToDanaRequest, $e);
         }
     }
 
@@ -1680,7 +1751,7 @@ class DisbursementApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $transferToDanaRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -1690,8 +1761,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToDanaRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1732,6 +1805,16 @@ class DisbursementApi
             );
         }
 
+
+        // Run custom validations / sandbox mutations
+        // This validation runs even when structs are created directly (bypassing setters)
+        try {
+            \Dana\Disbursement\v1\CustomValidation::validate($transferToDanaRequest);
+        } catch (\Dana\ApiException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new \InvalidArgumentException('Custom validation failed: ' . $e->getMessage());
+        }
 
         $resourcePath = '/rest/v1.0/emoney/topup';
         $formParams = [];
@@ -1908,8 +1991,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToDanaInquiryStatusResponse', []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToDanaInquiryStatusRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, '\Dana\Disbursement\v1\Model\TransferToDanaInquiryStatusResponse', []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -1950,8 +2035,10 @@ class DisbursementApi
                 }
             }
 
+            $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+            \Dana\Disbursement\v1\CustomValidation::processResponse($transferToDanaInquiryStatusRequest, $deserializedResponse);
             return [
-                ObjectSerializer::deserialize($content, $returnType, []),
+                $deserializedResponse,
                 $response->getStatusCode(),
                 $response->getHeaders()
             ];
@@ -1967,7 +2054,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw $e;
+            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($transferToDanaInquiryStatusRequest, $e);
         }
     }
 
@@ -2011,7 +2098,7 @@ class DisbursementApi
         return $this->client
             ->sendAsync($request, $this->createHttpClientOption())
             ->then(
-                function ($response) use ($returnType) {
+                function ($response) use ($returnType, $transferToDanaInquiryStatusRequest) {
                     if ($returnType === '\SplFileObject') {
                         $content = $response->getBody(); //stream goes to serializer
                     } else {
@@ -2021,8 +2108,10 @@ class DisbursementApi
                         }
                     }
 
+                    $deserializedResponse = ObjectSerializer::deserialize($content, $returnType, []);
+                    \Dana\Disbursement\v1\CustomValidation::processResponse($transferToDanaInquiryStatusRequest, $deserializedResponse);
                     return [
-                        ObjectSerializer::deserialize($content, $returnType, []),
+                        $deserializedResponse,
                         $response->getStatusCode(),
                         $response->getHeaders()
                     ];
@@ -2063,6 +2152,16 @@ class DisbursementApi
             );
         }
 
+
+        // Run custom validations / sandbox mutations
+        // This validation runs even when structs are created directly (bypassing setters)
+        try {
+            \Dana\Disbursement\v1\CustomValidation::validate($transferToDanaInquiryStatusRequest);
+        } catch (\Dana\ApiException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new \InvalidArgumentException('Custom validation failed: ' . $e->getMessage());
+        }
 
         $resourcePath = '/rest/v1.0/emoney/topup-status';
         $formParams = [];

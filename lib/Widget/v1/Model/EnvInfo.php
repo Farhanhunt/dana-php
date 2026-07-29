@@ -103,6 +103,8 @@ class EnvInfo extends BaseModel
         $localData = [];
         $defaultValues = [
             
+            'sourcePlatform' => 'IPG',
+            
         ];
         
         // Initialize all properties with defaults or values from input data
@@ -148,9 +150,6 @@ class EnvInfo extends BaseModel
             $invalidProperties[] = "invalid value for 'sdkVersion', the character length must be smaller than or equal to 128.";
         }
 
-        if ($this->container['sourcePlatform'] === null) {
-            $invalidProperties[] = "'sourcePlatform' can't be null";
-        }
         $allowedValues = $this->getSourcePlatformAllowableValues();
         if (!is_null($this->container['sourcePlatform']) && !in_array($this->container['sourcePlatform'], $allowedValues, true)) {
             $invalidProperties[] = sprintf(
@@ -160,7 +159,7 @@ class EnvInfo extends BaseModel
             );
         }
 
-        if ((mb_strlen($this->container['sourcePlatform']) > 32)) {
+        if (!is_null($this->container['sourcePlatform']) && (mb_strlen($this->container['sourcePlatform']) > 32)) {
             $invalidProperties[] = "invalid value for 'sourcePlatform', the character length must be smaller than or equal to 32.";
         }
 
