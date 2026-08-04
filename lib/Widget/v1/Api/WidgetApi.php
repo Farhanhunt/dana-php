@@ -186,9 +186,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -617,9 +618,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -1048,9 +1050,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -1479,9 +1482,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -1910,9 +1914,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -2341,9 +2346,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -2772,9 +2778,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -3203,9 +3210,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -3634,9 +3642,10 @@ class WidgetApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );

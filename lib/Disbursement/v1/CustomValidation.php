@@ -40,15 +40,6 @@ class CustomValidation
      *
      * @var string[]
      */
-    /** Sandbox-only allowed beneficiary account number */
-    private const SANDBOX_BENEFICIARY_ACCOUNT_NUMBER = '2460888509';
-
-    /** Sandbox-only allowed beneficiary bank code */
-    private const SANDBOX_BENEFICIARY_BANK_CODE = '014';
-
-    /** Sandbox maximum amount (major units) for Disbursement. */
-    private const SANDBOX_MAX_AMOUNT = 20000000;
-
     /** Allowed accountType enum values. */
     private const ALLOWED_ACCOUNT_TYPES = [
         'MERCHANT_DEPOSIT_ACCOUNT',
@@ -60,26 +51,20 @@ class CustomValidation
         'Dana\Disbursement\v1\Model\BankAccountInquiryRequest' => [
             'stripSandboxIgnoredFieldsBankAccountInquiry',
             'validateAccountTypeBankAccountInquiry',
-            'validateSandboxBeneficiaryBankAccountInquiry',
-            'validateSandboxAmount',
             'validateRequiredAdditionalInfoNotEmptyBankAccountInquiry',
         ],
         'Dana\Disbursement\v1\Model\TransferToBankRequest' => [
             'stripSandboxIgnoredFieldsTransferToBank',
             'validateAccountTypeTransferToBank',
-            'validateSandboxBeneficiaryTransferToBank',
-            'validateSandboxAmount',
             'validateRequiredAdditionalInfoNotEmptyTransferToBank',
         ],
         'Dana\Disbursement\v1\Model\TransferToDanaRequest' => [
             'stripSandboxIgnoredFieldsTransferToDana',
             'validateAccountTypeTransferToDana',
-            'validateSandboxAmount',
             'validateRequiredAdditionalInfoNotEmptyTransferToDana',
         ],
         'Dana\Disbursement\v1\Model\DanaAccountInquiryRequest' => [
             'stripSandboxIgnoredFieldsDanaAccountInquiry',
-            'validateSandboxAmount',
             'validateRequiredAdditionalInfoNotEmptyDanaAccountInquiry',
         ],
     ];
@@ -135,11 +120,23 @@ class CustomValidation
         }
     }
 
+    private const SANDBOX_POSITIVE_BENEFICIARY_ACCOUNT_NUMBER = '2460888509';
+
+    private const SANDBOX_POSITIVE_BENEFICIARY_BANK_CODE = '014';
+
+    private const SANDBOX_MAX_AMOUNT = 20000000;
+
+    private const SANDBOX_POSITIVE_BANK_HINT =
+        'For testing positive case in sandbox use beneficiaryAccountNumber 2460888509 and beneficiaryBankCode 014';
+
+    private const SANDBOX_AMOUNT_MAX_HINT =
+        'In sandbox, amount.value must not exceed 20000000';
+
     private const SANDBOX_DANA_BALANCE_LIMIT_HINT =
         'Make sure DANA balance not exceeding limit of 21000000 after topup';
 
     /**
-     * Augment TransferToDana responses in sandbox on business errors.
+     * Augment Disbursement responses in sandbox with account/amount guidance.
      *
      * @param mixed $request
      * @param mixed $response
@@ -150,37 +147,22 @@ class CustomValidation
         if (!self::isSandbox() || $request === null || $response === null) {
             return;
         }
-        if (!($request instanceof TransferToDanaRequest)) {
-            return;
-        }
         if (!method_exists($response, 'getResponseMessage') || !method_exists($response, 'offsetSet')) {
             return;
         }
-        $responseCode = method_exists($response, 'getResponseCode') ? (string) $response->getResponseCode() : '';
-        if (!self::isBusinessErrorResponse($responseCode)) {
-            return;
-        }
-        $response->offsetSet(
-            'responseMessage',
-            self::appendSandboxHint(
-                $response->getResponseMessage(),
-                self::SANDBOX_DANA_BALANCE_LIMIT_HINT,
-                '21000000',
-                'after topup'
-            )
-        );
+        self::applySandboxDisbursementHints($request, $response);
     }
 
     /**
-     * Enrich TransferToDana HTTP errors in sandbox.
+     * Enrich Disbursement HTTP errors in sandbox.
      *
      * @param mixed $request
      * @param ApiException $e
      * @return ApiException
      */
-    public static function enrichTransferToDanaError($request, ApiException $e)
+    public static function enrichDisbursementError($request, ApiException $e)
     {
-        if (!self::isSandbox() || !($request instanceof TransferToDanaRequest)) {
+        if (!self::isSandbox() || $request === null) {
             return $e;
         }
         $body = (string) $e->getResponseBody();
@@ -195,21 +177,120 @@ class CustomValidation
         if (!is_array($payload)) {
             return $e;
         }
-        $response = new \Dana\Disbursement\v1\Model\TransferToDanaResponse([
-            'responseCode' => isset($payload['responseCode']) ? (string) $payload['responseCode'] : '',
-            'responseMessage' => isset($payload['responseMessage']) ? (string) $payload['responseMessage'] : '',
-            'partnerReferenceNo' => isset($payload['partnerReferenceNo']) ? (string) $payload['partnerReferenceNo'] : '',
-        ]);
+
+        $response = self::newDisbursementErrorResponse($request, $payload);
+        if ($response === null) {
+            return $e;
+        }
+
         self::processResponse($request, $response);
         $enriched = new ApiException($e->getMessage(), $e->getCode(), $e->getResponseHeaders(), $e->getResponseBody());
         $enriched->setResponseObject($response);
         return $enriched;
     }
 
-    private static function isBusinessErrorResponse(string $responseCode): bool
+    /**
+     * @param mixed $request
+     * @param array<string, mixed> $payload
+     * @return object|null
+     */
+    private static function newDisbursementErrorResponse($request, array $payload)
     {
-        $code = trim($responseCode);
-        return $code === '' || strpos($code, '200') !== 0;
+        $data = [
+            'responseCode' => isset($payload['responseCode']) ? (string) $payload['responseCode'] : '',
+            'responseMessage' => isset($payload['responseMessage']) ? (string) $payload['responseMessage'] : '',
+            'partnerReferenceNo' => isset($payload['partnerReferenceNo']) ? (string) $payload['partnerReferenceNo'] : '',
+        ];
+
+        if ($request instanceof BankAccountInquiryRequest) {
+            return new \Dana\Disbursement\v1\Model\BankAccountInquiryResponse($data);
+        }
+        if ($request instanceof DanaAccountInquiryRequest) {
+            return new \Dana\Disbursement\v1\Model\DanaAccountInquiryResponse($data);
+        }
+        if ($request instanceof TransferToBankRequest) {
+            return new \Dana\Disbursement\v1\Model\TransferToBankResponse($data);
+        }
+        if ($request instanceof TransferToDanaRequest) {
+            return new \Dana\Disbursement\v1\Model\TransferToDanaResponse($data);
+        }
+
+        return null;
+    }
+
+    /**
+     * Enrich TransferToDana HTTP errors in sandbox.
+     *
+     * @param mixed $request
+     * @param ApiException $e
+     * @return ApiException
+     */
+    public static function enrichTransferToDanaError($request, ApiException $e)
+    {
+        return self::enrichDisbursementError($request, $e);
+    }
+
+    private static function shouldAppendDanaBalanceHint(string $responseCode, $responseMessage): bool
+    {
+        $msg = strtolower(trim((string) $responseMessage));
+        if (strpos($msg, 'exceed') !== false || strpos($msg, 'melebihi') !== false) {
+            return true;
+        }
+        return trim($responseCode) === '4033802';
+    }
+
+    private static function isBankTransferRequest($request): bool
+    {
+        return $request instanceof BankAccountInquiryRequest || $request instanceof TransferToBankRequest;
+    }
+
+    private static function shouldAppendPositiveBankHint(string $responseCode): bool
+    {
+        return strpos(trim($responseCode), '500') === 0;
+    }
+
+    private static function shouldAppendAmountMaxHint($responseMessage): bool
+    {
+        $msg = strtolower(trim((string) $responseMessage));
+        return strpos($msg, 'exceed') !== false || strpos($msg, 'melebihi') !== false;
+    }
+
+    private static function applySandboxDisbursementHints($request, $response): void
+    {
+        $responseCode = method_exists($response, 'getResponseCode') ? (string) $response->getResponseCode() : '';
+        $responseMessage = $response->getResponseMessage();
+
+        $updated = trim((string) $responseMessage);
+
+        if (self::isBankTransferRequest($request) && self::shouldAppendPositiveBankHint($responseCode)) {
+            $updated = self::appendSandboxHint(
+                $updated,
+                self::SANDBOX_POSITIVE_BANK_HINT,
+                self::SANDBOX_POSITIVE_BENEFICIARY_ACCOUNT_NUMBER,
+                'beneficiarybankcode ' . self::SANDBOX_POSITIVE_BENEFICIARY_BANK_CODE
+            );
+        }
+
+        if ($request instanceof TransferToDanaRequest) {
+            if (self::shouldAppendDanaBalanceHint($responseCode, $responseMessage)) {
+                $updated = self::appendSandboxHint(
+                    $updated,
+                    self::SANDBOX_DANA_BALANCE_LIMIT_HINT,
+                    '21000000',
+                    'after topup'
+                );
+            }
+        } elseif (self::shouldAppendAmountMaxHint($responseMessage)) {
+            $updated = self::appendSandboxHint(
+                $updated,
+                self::SANDBOX_AMOUNT_MAX_HINT,
+                (string) self::SANDBOX_MAX_AMOUNT
+            );
+        }
+
+        if ($updated !== trim((string) $responseMessage)) {
+            $response->offsetSet('responseMessage', $updated);
+        }
     }
 
     /**
@@ -242,42 +323,6 @@ class CustomValidation
     {
         $env = getenv('DANA_ENV') ?: getenv('ENV') ?: 'sandbox';
         return strtolower($env) === 'sandbox';
-    }
-
-    /**
-     * In sandbox, amount.value must not exceed SANDBOX_MAX_AMOUNT.
-     *
-     * @param mixed $request The request to validate
-     * @return void
-     * @throws ApiException if validation fails
-     */
-    private static function validateSandboxAmount($request)
-    {
-        if ($request === null || !self::isSandbox()) {
-            return;
-        }
-        if (!method_exists($request, 'getAmount')) {
-            return;
-        }
-        $amount = $request->getAmount();
-        if ($amount === null || !method_exists($amount, 'getValue')) {
-            return;
-        }
-        $value = $amount->getValue();
-        if ($value === null || trim((string) $value) === '') {
-            return;
-        }
-        if (!is_numeric($value)) {
-            return;
-        }
-        if ((float) $value > self::SANDBOX_MAX_AMOUNT) {
-            throw new ApiException(
-                'in sandbox, amount.value must not exceed ' . self::SANDBOX_MAX_AMOUNT . '; got ' . $value,
-                0,
-                null,
-                null
-            );
-        }
     }
 
     /**
@@ -485,86 +530,6 @@ class CustomValidation
             return;
         }
         self::validateAccountTypeValue(trim((string) $accountType), 'additionalInfo.accountType');
-    }
-
-    /**
-     * In sandbox, beneficiaryAccountNumber must be 2460888509 and beneficiaryBankCode must be 014.
-     *
-     * @param mixed $request
-     * @return void
-     * @throws ApiException
-     */
-    private static function validateSandboxBeneficiaryBankAccountInquiry($request)
-    {
-        if ($request === null || !self::isSandbox()) {
-            return;
-        }
-        $accountNumber = method_exists($request, 'getBeneficiaryAccountNumber')
-            ? $request->getBeneficiaryAccountNumber()
-            : null;
-        if (trim((string) $accountNumber) !== self::SANDBOX_BENEFICIARY_ACCOUNT_NUMBER) {
-            throw new ApiException(
-                'In sandbox, beneficiaryAccountNumber must be ' . self::SANDBOX_BENEFICIARY_ACCOUNT_NUMBER
-                    . '; got ' . (string) $accountNumber,
-                0,
-                null,
-                null
-            );
-        }
-        $bankCode = null;
-        if (method_exists($request, 'getAdditionalInfo')) {
-            $additionalInfo = $request->getAdditionalInfo();
-            if ($additionalInfo !== null && method_exists($additionalInfo, 'getBeneficiaryBankCode')) {
-                $bankCode = $additionalInfo->getBeneficiaryBankCode();
-            }
-        }
-        if (trim((string) $bankCode) !== self::SANDBOX_BENEFICIARY_BANK_CODE) {
-            throw new ApiException(
-                'In sandbox, additionalInfo.beneficiaryBankCode must be ' . self::SANDBOX_BENEFICIARY_BANK_CODE
-                    . '; got ' . (string) $bankCode,
-                0,
-                null,
-                null
-            );
-        }
-    }
-
-    /**
-     * In sandbox, beneficiaryAccountNumber must be 2460888509 and beneficiaryBankCode must be 014.
-     *
-     * @param mixed $request
-     * @return void
-     * @throws ApiException
-     */
-    private static function validateSandboxBeneficiaryTransferToBank($request)
-    {
-        if ($request === null || !self::isSandbox()) {
-            return;
-        }
-        $accountNumber = method_exists($request, 'getBeneficiaryAccountNumber')
-            ? $request->getBeneficiaryAccountNumber()
-            : null;
-        if (trim((string) $accountNumber) !== self::SANDBOX_BENEFICIARY_ACCOUNT_NUMBER) {
-            throw new ApiException(
-                'In sandbox, beneficiaryAccountNumber must be ' . self::SANDBOX_BENEFICIARY_ACCOUNT_NUMBER
-                    . '; got ' . (string) $accountNumber,
-                0,
-                null,
-                null
-            );
-        }
-        $bankCode = method_exists($request, 'getBeneficiaryBankCode')
-            ? $request->getBeneficiaryBankCode()
-            : null;
-        if (trim((string) $bankCode) !== self::SANDBOX_BENEFICIARY_BANK_CODE) {
-            throw new ApiException(
-                'In sandbox, beneficiaryBankCode must be ' . self::SANDBOX_BENEFICIARY_BANK_CODE
-                    . '; got ' . (string) $bankCode,
-                0,
-                null,
-                null
-            );
-        }
     }
 
     /**

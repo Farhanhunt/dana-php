@@ -178,9 +178,10 @@ class DisbursementApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -282,7 +283,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($bankAccountInquiryRequest, $e);
+            throw \Dana\Disbursement\v1\CustomValidation::enrichDisbursementError($bankAccountInquiryRequest, $e);
         }
     }
 
@@ -525,9 +526,10 @@ class DisbursementApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -629,7 +631,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($danaAccountInquiryRequest, $e);
+            throw \Dana\Disbursement\v1\CustomValidation::enrichDisbursementError($danaAccountInquiryRequest, $e);
         }
     }
 
@@ -872,9 +874,10 @@ class DisbursementApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -1013,7 +1016,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($transferToBankRequest, $e);
+            throw \Dana\Disbursement\v1\CustomValidation::enrichDisbursementError($transferToBankRequest, $e);
         }
     }
 
@@ -1256,9 +1259,10 @@ class DisbursementApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -1360,7 +1364,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($transferToBankInquiryStatusRequest, $e);
+            throw \Dana\Disbursement\v1\CustomValidation::enrichDisbursementError($transferToBankInquiryStatusRequest, $e);
         }
     }
 
@@ -1603,9 +1607,10 @@ class DisbursementApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -1707,7 +1712,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($transferToDanaRequest, $e);
+            throw \Dana\Disbursement\v1\CustomValidation::enrichDisbursementError($transferToDanaRequest, $e);
         }
     }
 
@@ -1950,9 +1955,10 @@ class DisbursementApi
             try {
                 $response = $this->client->send($request, $options);
             } catch (RequestException $e) {
+                $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : (int) $e->getCode();
                 throw new ApiException(
-                    "[{$e->getCode()}] {$e->getMessage()}",
-                    (int) $e->getCode(),
+                    sprintf('[%d] %s', $statusCode, $e->getMessage()),
+                    $statusCode,
                     $e->getResponse() ? $e->getResponse()->getHeaders() : null,
                     $e->getResponse() ? (string) $e->getResponse()->getBody() : null
                 );
@@ -2054,7 +2060,7 @@ class DisbursementApi
                     $e->setResponseObject($data);
                     break;
             }
-            throw \Dana\Disbursement\v1\CustomValidation::enrichTransferToDanaError($transferToDanaInquiryStatusRequest, $e);
+            throw \Dana\Disbursement\v1\CustomValidation::enrichDisbursementError($transferToDanaInquiryStatusRequest, $e);
         }
     }
 

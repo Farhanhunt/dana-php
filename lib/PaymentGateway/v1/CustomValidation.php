@@ -127,16 +127,16 @@ class CustomValidation
     }
 
     private const SANDBOX_QRIS_GUIDANCE_HINT_SUCCESS =
-        'If you want to use QRIS and it is not showing in payment methods, make sure you already fill externalStoreId. See https://dashboard.dana.id/sandbox/submerchants in the external shop id section.';
+        'If you want to use QRIS and it is not showing in payment methods, make sure you already fill externalStoreId. See https://dashboard.dana.id/sandbox/submerchants in the external shop id section. For QRIS, partnerReferenceNo max is 25 chars.';
 
     private const SANDBOX_QRIS_GUIDANCE_HINT_ERROR =
         'If you want to use QRIS, make sure you fill externalStoreId. See https://dashboard.dana.id/sandbox/submerchants in the external shop id section. For QRIS, partnerReferenceNo max is 25 chars.';
 
-    private const SANDBOX_SUB_MERCHANT_ID_GUIDANCE_HINT =
-        'Make sure your subMerchantId exists. You can see it at https://dashboard.dana.id/sandbox/submerchants in the External Division ID section.';
+    private const SANDBOX_NOT_FOUND_STORE_GUIDANCE_HINT =
+        'If you are using QRIS / making order for your store / submerchant, make sure externalStoreId / subMerchant exists. See https://dashboard.dana.id/sandbox/submerchants external shop id section for external store id and external division id section for submerchant';
 
     /**
-     * Augment CreateOrder responses in sandbox (QRIS / subMerchantId guidance).
+     * Augment CreateOrder responses in sandbox with code-specific tips.
      *
      * @param mixed $request
      * @param mixed $response
@@ -151,40 +151,7 @@ class CustomValidation
             return;
         }
 
-        if ($request instanceof CreateOrderByRedirectRequest) {
-            $externalStoreId = method_exists($request, 'getExternalStoreId')
-                ? $request->getExternalStoreId()
-                : null;
-            if ($externalStoreId === null || trim((string) $externalStoreId) === '') {
-                $response->offsetSet(
-                    'responseMessage',
-                    self::appendSandboxHint(
-                        $response->getResponseMessage(),
-                        self::SANDBOX_QRIS_GUIDANCE_HINT_SUCCESS,
-                        'externalstoreid'
-                    )
-                );
-            }
-        }
-
-        $subMerchantId = null;
-        if (method_exists($request, 'getSubMerchantId')) {
-            $subMerchantId = $request->getSubMerchantId();
-        }
-        if ($subMerchantId !== null && trim((string) $subMerchantId) !== '') {
-            $responseCode = method_exists($response, 'getResponseCode') ? (string) $response->getResponseCode() : '';
-            if (self::isBusinessErrorResponse($responseCode)) {
-                $response->offsetSet(
-                    'responseMessage',
-                    self::appendSandboxHint(
-                        $response->getResponseMessage(),
-                        self::SANDBOX_SUB_MERCHANT_ID_GUIDANCE_HINT,
-                        'submerchantid',
-                        'externaldivisionid'
-                    )
-                );
-            }
-        }
+        self::applySandboxCreateOrderHints($request, $response);
     }
 
     /**
@@ -220,22 +187,15 @@ class CustomValidation
             'partnerReferenceNo' => isset($payload['partnerReferenceNo']) ? (string) $payload['partnerReferenceNo'] : '',
         ]);
 
-        self::processResponse($request, $response);
+        $originalMsg = (string) $response->getResponseMessage();
+        self::applySandboxCreateOrderHints($request, $response);
 
-        $errMsg = $e->getMessage();
-        if ($request instanceof CreateOrderByRedirectRequest) {
-            $externalStoreId = method_exists($request, 'getExternalStoreId')
-                ? $request->getExternalStoreId()
-                : null;
-            if ($externalStoreId === null || trim((string) $externalStoreId) === '') {
-                $hinted = self::appendSandboxHint(
-                    '',
-                    self::SANDBOX_QRIS_GUIDANCE_HINT_ERROR,
-                    'externalstoreid',
-                    'partnerreferenceno'
-                );
-                $errMsg = $e->getCode() . ': ' . $hinted;
-            }
+        // Match Go EnrichCreateOrderError: mirror enriched responseMessage on the error
+        // string only when hints changed it; debugMessage stays in the response body.
+        $errMsg = (string) $e->getMessage();
+        $newMsg = (string) $response->getResponseMessage();
+        if ($newMsg !== $originalMsg && trim($newMsg) !== '') {
+            $errMsg = $e->getCode() . ': ' . $newMsg;
         }
 
         $enriched = new ApiException(
@@ -248,10 +208,107 @@ class CustomValidation
         return $enriched;
     }
 
+    /**
+     * Tip rules:
+     * - 200*: SUCCESS QRIS tip when redirect omits externalStoreId (includes partnerRef max 25)
+     * - Invalid Merchant (e.g. 4045408): store/subMerchant existence tip
+     * - 500* or 400* with reference/store/merchant in message: ERROR QRIS tip
+     *
+     * @param mixed $request
+     * @param mixed $response
+     * @return void
+     */
+    private static function applySandboxCreateOrderHints($request, $response): void
+    {
+        $responseCode = method_exists($response, 'getResponseCode') ? (string) $response->getResponseCode() : '';
+        $responseMessage = method_exists($response, 'getResponseMessage') ? (string) $response->getResponseMessage() : '';
+
+        $code = trim($responseCode);
+
+        if (self::isSuccessfulSnapResponse($code)) {
+            if ($request instanceof CreateOrderByRedirectRequest) {
+                $externalStoreId = method_exists($request, 'getExternalStoreId')
+                    ? $request->getExternalStoreId()
+                    : null;
+                if ($externalStoreId === null || trim((string) $externalStoreId) === '') {
+                    $response->offsetSet(
+                        'responseMessage',
+                        self::appendSandboxHint(
+                            $response->getResponseMessage(),
+                            self::SANDBOX_QRIS_GUIDANCE_HINT_SUCCESS,
+                            'externalstoreid',
+                            'partnerreferenceno'
+                        )
+                    );
+                }
+            }
+            return;
+        }
+
+        if (self::shouldAppendStoreSubmerchantHint($code, $responseMessage)) {
+            $response->offsetSet(
+                'responseMessage',
+                self::appendSandboxHint(
+                    $response->getResponseMessage(),
+                    self::SANDBOX_NOT_FOUND_STORE_GUIDANCE_HINT,
+                    'externalstoreid',
+                    'submerchant',
+                    'external division id',
+                    'external shop id'
+                )
+            );
+            return;
+        }
+
+        if (self::shouldAppendQrisErrorHint($code, $responseMessage)) {
+            $response->offsetSet(
+                'responseMessage',
+                self::appendSandboxHint(
+                    $response->getResponseMessage(),
+                    self::SANDBOX_QRIS_GUIDANCE_HINT_ERROR,
+                    'externalstoreid',
+                    'partnerreferenceno'
+                )
+            );
+        }
+    }
+
     private static function isBusinessErrorResponse(string $responseCode): bool
     {
         $code = trim($responseCode);
         return $code === '' || strpos($code, '200') !== 0;
+    }
+
+    private static function isSuccessfulSnapResponse(string $responseCode): bool
+    {
+        return strpos(trim($responseCode), '200') === 0;
+    }
+
+    private static function shouldAppendStoreSubmerchantHint(string $responseCode, string $responseMessage): bool
+    {
+        $msg = strtolower(trim($responseMessage));
+        if (strpos($msg, 'invalid merchant') !== false) {
+            return true;
+        }
+        return trim($responseCode) === '4045408';
+    }
+
+    private static function shouldAppendQrisErrorHint(string $responseCode, string $responseMessage): bool
+    {
+        $code = trim($responseCode);
+        if (strpos($code, '500') === 0) {
+            return true;
+        }
+        if (strpos($code, '400') !== 0) {
+            return false;
+        }
+        $msg = strtolower($responseMessage);
+        foreach (['reference', 'store', 'merchant'] as $marker) {
+            if ($marker !== '' && strpos($msg, $marker) !== false) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
