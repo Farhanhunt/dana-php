@@ -183,8 +183,21 @@ class CustomValidation
             return $e;
         }
 
+        $originalMsg = (string) $response->getResponseMessage();
         self::processResponse($request, $response);
-        $enriched = new ApiException($e->getMessage(), $e->getCode(), $e->getResponseHeaders(), $e->getResponseBody());
+
+        $errMsg = (string) $e->getMessage();
+        $newMsg = (string) $response->getResponseMessage();
+        if ($newMsg !== $originalMsg && trim($newMsg) !== '') {
+            $errMsg = $e->getCode() . ': ' . $newMsg;
+        }
+
+        $enriched = new ApiException(
+            $errMsg,
+            $e->getCode(),
+            $e->getResponseHeaders(),
+            $e->getResponseBody()
+        );
         $enriched->setResponseObject($response);
         return $enriched;
     }
