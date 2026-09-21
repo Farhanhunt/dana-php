@@ -1,8 +1,8 @@
-.gitlab/** export-ignore
-ci/** export-ignore
-.openapi-generator/** export-ignore
-docs/** export-ignore
-tests/** export-ignore
-build/** export-ignore
-README.md export-ignore
-vendor/** export-ignore
+.gitlab/** export-accountid
+ci/** export-accountid
+.openapi-generator/** export-accountid
+docs/** export-accountid
+tests/** export-accountid
+build/** export-accountid
+README.md export-accountid
+vendor/** export-accountid
